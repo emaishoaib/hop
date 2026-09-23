@@ -35,6 +35,35 @@ struct Window {
         }
     }
 
+    /// What the switcher shows under this window.
+    ///
+    /// For a VS Code window on a file inside a git repo, this is the repo's name.
+    /// Otherwise it's the window's title, or the app's name when the window has no title.
+    var label: String {
+        vsCodeRepoName ?? (title.isEmpty ? appName : title)
+    }
+
+    /// The name of the git repo holding the file open in this window, when this is a VS Code window.
+    ///
+    /// VS Code reports the open file through Accessibility. The repo is the nearest folder above it that contains `.git`.
+    private var vsCodeRepoName: String? {
+        var value: CFTypeRef?
+        guard NSRunningApplication(processIdentifier: pid)?.bundleIdentifier == "com.microsoft.VSCode",
+              let window = accessibilityWindow(in: AXUIElementCreateApplication(pid)),
+              AXUIElementCopyAttributeValue(window, kAXDocumentAttribute as CFString, &value) == .success,
+              let document = value as? String,
+              let file = URL(string: document), file.isFileURL
+        else { return nil }
+        var folder = file.deletingLastPathComponent()
+        while folder.path != "/" {
+            if FileManager.default.fileExists(atPath: folder.appendingPathComponent(".git").path) {
+                return folder.lastPathComponent
+            }
+            folder.deleteLastPathComponent()
+        }
+        return nil
+    }
+
     /// Brings this window to the front and makes its app the active one, leaving the app's other windows where they are.
     ///
     /// The window is made its app's main window first, because activating an app brings only its main window forward.

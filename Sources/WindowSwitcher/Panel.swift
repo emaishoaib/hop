@@ -16,7 +16,10 @@ enum Panel {
         let width: CGFloat
         (width, columns) = layout(count: windows.count, sample: windows[0], in: NSSize(width: area.width * 0.9, height: area.height * 0.9))
         tiles = windows.map { Tile($0, width: width) }
-        for (index, tile) in tiles.enumerated() { tile.onClick = { Switcher.pick(index) } }
+        for (index, tile) in tiles.enumerated() {
+            tile.onHover = { Switcher.select(index) }
+            tile.onClick = { Switcher.pick(index) }
+        }
 
         let rows = stride(from: 0, to: tiles.count, by: columns).map { start in
             let row = NSStackView(views: Array(tiles[start..<min(start + columns, tiles.count)]))

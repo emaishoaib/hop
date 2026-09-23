@@ -34,6 +34,13 @@ enum Switcher {
         Panel.select(selected)
     }
 
+    /// Selects the window at `index`, as the mouse moves over its tile.
+    static func select(_ index: Int) {
+        guard index != selected else { return }
+        selected = index
+        Panel.select(selected)
+    }
+
     /// Ends the switch on the window at `index`, without waiting for ⌥ to be released.
     static func pick(_ index: Int) {
         selected = index

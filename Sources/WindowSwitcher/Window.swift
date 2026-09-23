@@ -31,4 +31,35 @@ struct Window {
             )
         }
     }
+
+    /// Raises this window above its app's other windows and makes its app the active one.
+    ///
+    /// When the window can't be found through Accessibility, the app is still activated.
+    func focus() {
+        let app = AXUIElementCreateApplication(pid)
+        if let window = accessibilityWindow(in: app) {
+            AXUIElementPerformAction(window, kAXRaiseAction as CFString)
+            AXUIElementSetAttributeValue(window, kAXMainAttribute as CFString, kCFBooleanTrue)
+        }
+        AXUIElementSetAttributeValue(app, kAXFrontmostAttribute as CFString, kCFBooleanTrue)
+    }
+
+    /// The Accessibility element for this window, found among its app's windows by window id.
+    private func accessibilityWindow(in app: AXUIElement) -> AXUIElement? {
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(app, kAXWindowsAttribute as CFString, &value) == .success,
+              let windows = value as? [AXUIElement]
+        else { return nil }
+        return windows.first { window in
+            var windowID: CGWindowID = 0
+            return _AXUIElementGetWindow(window, &windowID) == .success && windowID == id
+        }
+    }
 }
+
+/// Reads the window id behind an Accessibility window element.
+///
+/// This is a private macOS function, but the only reliable way to tie an Accessibility window
+/// to the window id the window list reports. It has been stable for over a decade.
+@_silgen_name("_AXUIElementGetWindow")
+private func _AXUIElementGetWindow(_ element: AXUIElement, _ id: UnsafeMutablePointer<CGWindowID>) -> AXError

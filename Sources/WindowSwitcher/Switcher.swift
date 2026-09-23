@@ -18,9 +18,10 @@ enum Switcher {
         Panel.select(selected)
     }
 
-    /// Ends the switch and hides the panel.
+    /// Ends the switch: hides the panel and focuses the selected window.
     static func release() {
         Panel.hide()
+        if windows.indices.contains(selected) { windows[selected].focus() }
         windows = []
     }
 }

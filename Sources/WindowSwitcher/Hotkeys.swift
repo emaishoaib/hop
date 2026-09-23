@@ -13,11 +13,24 @@ enum Hotkeys {
     private static var tap: CFMachPort?
     private static var isOpen = false
 
-    /// Waits for Accessibility permission, prompting once, then starts listening.
+    /// Starts listening once Accessibility permission is granted.
+    ///
+    /// Without it, the app prompts once, shows its Dock icon, and checks again every second.
+    /// The Dock icon hides again as soon as the permission is granted.
     static func start() {
-        AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)
-        while !AXIsProcessTrusted() { sleep(1) }
+        if AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary) { return listen() }
+        NSApp.setActivationPolicy(.regular)
+        Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { timer in
+            guard AXIsProcessTrusted() else { return }
+            timer.invalidate()
+            MainActor.assumeIsolated {
+                NSApp.setActivationPolicy(.accessory)
+                listen()
+            }
+        }
+    }
 
+    private static func listen() {
         let mask = CGEventMask(1 << CGEventType.keyDown.rawValue | 1 << CGEventType.flagsChanged.rawValue)
         tap = CGEvent.tapCreate(
             tap: .cgSessionEventTap,

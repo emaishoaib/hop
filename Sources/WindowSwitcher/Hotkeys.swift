@@ -1,0 +1,70 @@
+import AppKit
+import Carbon.HIToolbox
+
+/// Watches the keyboard system-wide for ⌥Tab and ⌥`, and for ⌥ being released.
+///
+/// The first press opens a switch, each further press while ⌥ is held advances it,
+/// and releasing ⌥ ends it. The Tab and ` presses are swallowed so the focused app
+/// never sees them.
+@MainActor
+enum Hotkeys {
+    enum Scope { case allApps, activeApp }
+
+    private static var tap: CFMachPort?
+    private static var active: Scope?
+
+    /// Waits for Accessibility permission, prompting once, then starts listening.
+    static func start() {
+        AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)
+        while !AXIsProcessTrusted() { sleep(1) }
+
+        let mask = CGEventMask(1 << CGEventType.keyDown.rawValue | 1 << CGEventType.flagsChanged.rawValue)
+        tap = CGEvent.tapCreate(
+            tap: .cgSessionEventTap,
+            place: .headInsertEventTap,
+            options: .defaultTap,
+            eventsOfInterest: mask,
+            callback: { _, type, event, _ in
+                let swallow = MainActor.assumeIsolated { handle(type, event) }
+                return swallow ? nil : Unmanaged.passUnretained(event)
+            },
+            userInfo: nil
+        )
+        guard let tap else { fatalError("Could not create the keyboard event tap") }
+        CFRunLoopAddSource(CFRunLoopGetMain(), CFMachPortCreateRunLoopSource(nil, tap, 0), .commonModes)
+    }
+
+    /// Updates the switch state for one event and returns whether to swallow it.
+    private static func handle(_ type: CGEventType, _ event: CGEvent) -> Bool {
+        switch type {
+        case .tapDisabledByTimeout, .tapDisabledByUserInput:
+            if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
+        case .keyDown:
+            guard event.flags.contains(.maskAlternate), let scope = scope(for: event) else { return false }
+            if active == nil {
+                active = scope
+                print("open: \(scope)")
+            } else {
+                print("next")
+            }
+            return true
+        case .flagsChanged:
+            if let scope = active, !event.flags.contains(.maskAlternate) {
+                active = nil
+                print("release: \(scope)")
+            }
+        default:
+            break
+        }
+        return false
+    }
+
+    /// The scope a key opens, or nil when it isn't one of the switcher's keys.
+    private static func scope(for event: CGEvent) -> Scope? {
+        switch Int(event.getIntegerValueField(.keyboardEventKeycode)) {
+        case kVK_Tab: .allApps
+        case kVK_ANSI_Grave: .activeApp
+        default: nil
+        }
+    }
+}

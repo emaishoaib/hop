@@ -38,7 +38,7 @@ enum Hotkeys {
             options: .defaultTap,
             eventsOfInterest: mask,
             callback: { _, type, event, _ in
-                let swallow = MainActor.assumeIsolated { handle(type, event) }
+                let swallow = MainActor.assumeIsolated { Hotkeys.handle(type, event) }
                 return swallow ? nil : Unmanaged.passUnretained(event)
             },
             userInfo: nil

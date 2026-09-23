@@ -28,7 +28,7 @@ final class Tile: NSView {
         thumbnail.image = NSRunningApplication(processIdentifier: window.pid)?.icon
         thumbnail.imageScaling = .scaleProportionallyUpOrDown
 
-        let title = NSTextField(labelWithString: window.title.isEmpty ? window.appName : window.title)
+        let title = NSTextField(labelWithString: window.label)
         title.alignment = .center
         title.lineBreakMode = .byTruncatingTail
 

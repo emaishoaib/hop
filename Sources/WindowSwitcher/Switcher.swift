@@ -7,9 +7,9 @@ enum Switcher {
     /// Whether a switch is showing windows. It closes on ⌥ release or on a click, whichever comes first.
     static var isOpen: Bool { !windows.isEmpty }
 
-    /// Lists the windows for `scope`, selects the one behind the current window, and shows the panel.
+    /// Lists the windows for `scope`, most recently used first, selects the previous one, and shows the panel.
     static func open(_ scope: Hotkeys.Scope) {
-        windows = Window.onScreen(scope)
+        windows = Recents.sorted(Window.onScreen(scope))
         selected = windows.count > 1 ? 1 : 0
         OrderLog.log("open")
         Panel.show(windows, selected: selected)
@@ -54,6 +54,7 @@ enum Switcher {
         if windows.indices.contains(selected) {
             let target = windows[selected]
             OrderLog.log("before focus on \(target.appName) #\(target.id)")
+            Recents.record(target.id)
             target.focus()
             Task {
                 try? await Task.sleep(for: .milliseconds(500))

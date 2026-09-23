@@ -11,7 +11,6 @@ enum Hotkeys {
     enum Scope { case allApps, activeApp }
 
     private static var tap: CFMachPort?
-    private static var isOpen = false
 
     /// Starts listening once Accessibility permission is granted.
     ///
@@ -55,21 +54,19 @@ enum Hotkeys {
         case .keyDown:
             guard event.flags.contains(.maskAlternate) else { return false }
             let keyCode = Int(event.getIntegerValueField(.keyboardEventKeycode))
-            if isOpen, let direction = direction(for: keyCode) {
+            if Switcher.isOpen, let direction = direction(for: keyCode) {
                 Switcher.move(direction)
                 return true
             }
             guard let scope = scope(for: keyCode) else { return false }
-            if isOpen {
+            if Switcher.isOpen {
                 Switcher.next()
             } else {
-                isOpen = true
                 Switcher.open(scope)
             }
             return true
         case .flagsChanged:
-            if isOpen, !event.flags.contains(.maskAlternate) {
-                isOpen = false
+            if Switcher.isOpen, !event.flags.contains(.maskAlternate) {
                 Switcher.release()
             }
         default:

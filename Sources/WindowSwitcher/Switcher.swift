@@ -4,6 +4,9 @@ enum Switcher {
     private static var windows: [Window] = []
     private static var selected = 0
 
+    /// Whether a switch is showing windows. It closes on ⌥ release or on a click, whichever comes first.
+    static var isOpen: Bool { !windows.isEmpty }
+
     /// Lists the windows for `scope`, selects the one behind the current window, and shows the panel.
     static func open(_ scope: Hotkeys.Scope) {
         windows = Window.onScreen(scope)
@@ -29,6 +32,12 @@ enum Switcher {
         default: return
         }
         Panel.select(selected)
+    }
+
+    /// Ends the switch on the window at `index`, without waiting for ⌥ to be released.
+    static func pick(_ index: Int) {
+        selected = index
+        release()
     }
 
     /// Ends the switch: hides the panel and focuses the selected window.

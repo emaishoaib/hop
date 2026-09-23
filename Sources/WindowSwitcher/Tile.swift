@@ -3,10 +3,12 @@ import AppKit
 /// One window in the panel: a thumbnail with the window's title underneath.
 ///
 /// The thumbnail starts as the app's icon and is replaced once the capture arrives.
+/// Clicking the tile calls `onClick`, even though the panel's app is never the active one.
 final class Tile: NSView {
     let windowID: CGWindowID
     let thumbnailWidth: CGFloat
     let thumbnail = NSImageView()
+    var onClick: (@MainActor () -> Void)?
 
     var isSelected = false {
         didSet { layer?.backgroundColor = isSelected ? NSColor.white.withAlphaComponent(0.2).cgColor : nil }
@@ -42,6 +44,12 @@ final class Tile: NSView {
             thumbnail.heightAnchor.constraint(equalToConstant: width * 0.625),
             title.widthAnchor.constraint(equalToConstant: width),
         ])
+    }
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    override func mouseDown(with event: NSEvent) {
+        onClick?()
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }

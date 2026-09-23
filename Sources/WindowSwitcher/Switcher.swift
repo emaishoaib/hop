@@ -11,7 +11,6 @@ enum Switcher {
     static func open(_ scope: Hotkeys.Scope) {
         windows = Recents.sorted(Window.onScreen(scope))
         selected = windows.count > 1 ? 1 : 0
-        OrderLog.log("open")
         Panel.show(windows, selected: selected)
     }
 
@@ -52,14 +51,8 @@ enum Switcher {
     static func release() {
         Panel.hide()
         if windows.indices.contains(selected) {
-            let target = windows[selected]
-            OrderLog.log("before focus on \(target.appName) #\(target.id)")
-            Recents.record(target.id)
-            target.focus()
-            Task {
-                try? await Task.sleep(for: .milliseconds(500))
-                OrderLog.log("half a second after focus")
-            }
+            Recents.record(windows[selected].id)
+            windows[selected].focus()
         }
         windows = []
     }

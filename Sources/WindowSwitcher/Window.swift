@@ -39,15 +39,12 @@ struct Window {
     ///
     /// The window is made its app's main window first, because activating an app brings only its main window forward.
     /// When the window can't be found through Accessibility, the app is still activated.
-    @MainActor
     func focus() {
         if let window = accessibilityWindow(in: AXUIElementCreateApplication(pid)) {
             AXUIElementSetAttributeValue(window, kAXMainAttribute as CFString, kCFBooleanTrue)
             AXUIElementPerformAction(window, kAXRaiseAction as CFString)
         }
-        OrderLog.log("after raise")
-        let accepted = NSRunningApplication(processIdentifier: pid)?.activate(options: []) ?? false
-        OrderLog.log("after activate, accepted: \(accepted)")
+        NSRunningApplication(processIdentifier: pid)?.activate(options: [])
     }
 
     /// The Accessibility element for this window, found among its app's windows by window id.

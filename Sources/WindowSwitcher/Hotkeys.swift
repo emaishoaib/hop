@@ -11,7 +11,7 @@ enum Hotkeys {
     enum Scope { case allApps, activeApp }
 
     private static var tap: CFMachPort?
-    private static var active: Scope?
+    private static var isOpen = false
 
     /// Waits for Accessibility permission, prompting once, then starts listening.
     static func start() {
@@ -41,17 +41,17 @@ enum Hotkeys {
             if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
         case .keyDown:
             guard event.flags.contains(.maskAlternate), let scope = scope(for: event) else { return false }
-            if active == nil {
-                active = scope
-                print("open: \(scope)")
+            if isOpen {
+                Switcher.next()
             } else {
-                print("next")
+                isOpen = true
+                Switcher.open(scope)
             }
             return true
         case .flagsChanged:
-            if let scope = active, !event.flags.contains(.maskAlternate) {
-                active = nil
-                print("release: \(scope)")
+            if isOpen, !event.flags.contains(.maskAlternate) {
+                isOpen = false
+                Switcher.release()
             }
         default:
             break

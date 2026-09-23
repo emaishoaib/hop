@@ -43,6 +43,12 @@ Hop is signed ad hoc, so macOS treats each rebuild as a new app. After a rebuild
 
 The Option` shortcut uses the physical key that types ` on a US keyboard, not the character. On a keyboard where that key sits somewhere else, the shortcut stays on the same physical key.
 
+### If Option + ` sometimes does nothing
+
+macOS has its own "Move focus to next window" shortcut, under System Settings → Keyboard → Keyboard Shortcuts → Keyboard. If it's bound to Option + `, macOS intermittently swallows the keypress before Hop sees it. The shortcut then works most of the time and silently does nothing the rest.
+
+Unticking the checkbox is not a reliable fix. Even with the shortcut disabled, macOS still intercepted the keypress some of the time. Reassign it to a combo nothing else uses instead.
+
 ## Private API
 
 Hop uses one private macOS function, `_AXUIElementGetWindow`. It's the only reliable way to match a window from the window list to the same window in Accessibility, and it has been stable for over a decade. If a macOS update breaks focusing or the window order, check this first.

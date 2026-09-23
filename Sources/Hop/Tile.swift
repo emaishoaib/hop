@@ -3,13 +3,11 @@ import AppKit
 /// One window in the panel: a thumbnail with the window's title underneath.
 ///
 /// The thumbnail starts as the app's icon and is replaced once the capture arrives.
-/// Moving the mouse over the tile calls `onHover`, and clicking it calls `onClick`,
-/// even though the panel's app is never the active one.
+/// Clicking the tile calls `onClick`, even though the panel's app is never the active one.
 final class Tile: NSView {
     let windowID: CGWindowID
     let thumbnailWidth: CGFloat
     let thumbnail = NSImageView()
-    var onHover: (@MainActor () -> Void)?
     var onClick: (@MainActor () -> Void)?
 
     var isSelected = false {
@@ -26,7 +24,6 @@ final class Tile: NSView {
         super.init(frame: .zero)
         wantsLayer = true
         layer?.cornerRadius = 10
-        addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseMoved, .activeAlways, .inVisibleRect], owner: self))
 
         thumbnail.image = NSRunningApplication(processIdentifier: window.pid)?.icon
         thumbnail.imageScaling = .scaleProportionallyUpOrDown
@@ -54,10 +51,6 @@ final class Tile: NSView {
     }
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
-
-    override func mouseMoved(with event: NSEvent) {
-        onHover?()
-    }
 
     override func mouseDown(with event: NSEvent) {
         onClick?()

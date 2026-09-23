@@ -9,7 +9,7 @@ Keep holding Option while you pick a window:
 
 - **Tab or `** moves to the next window.
 - **The arrow keys** move left, right, up and down through the grid.
-- **The mouse** selects a window when you move over it. Clicking switches to it straight away.
+- **A click** on a window switches to it straight away. Moving the mouse over the windows does nothing.
 
 Release Option to switch to the selected window, which is highlighted in blue.
 

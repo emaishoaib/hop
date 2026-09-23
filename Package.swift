@@ -2,9 +2,9 @@
 import PackageDescription
 
 let package = Package(
-    name: "WindowSwitcher",
+    name: "Hop",
     platforms: [.macOS(.v14)],
     targets: [
-        .executableTarget(name: "WindowSwitcher"),
+        .executableTarget(name: "Hop"),
     ]
 )

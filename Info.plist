@@ -3,11 +3,11 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleIdentifier</key>
-	<string>com.mustafa.window-switcher</string>
+	<string>com.mashoaib.hop</string>
 	<key>CFBundleExecutable</key>
-	<string>WindowSwitcher</string>
+	<string>Hop</string>
 	<key>CFBundleName</key>
-	<string>WindowSwitcher</string>
+	<string>Hop</string>
 	<key>CFBundleIconFile</key>
 	<string>AppIcon</string>
 	<key>LSUIElement</key>

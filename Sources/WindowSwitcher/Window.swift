@@ -9,7 +9,8 @@ struct Window {
 
     /// The normal app windows on screen, frontmost first.
     ///
-    /// For `.activeApp`, only the frontmost app's windows are kept.
+    /// Windows under 100 points in either direction are skipped, since those are apps' helper windows,
+    /// not windows you'd switch to. For `.activeApp`, only the frontmost app's windows are kept.
     @MainActor
     static func onScreen(_ scope: Hotkeys.Scope) -> [Window] {
         let entries = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[CFString: Any]] ?? []
@@ -18,6 +19,8 @@ struct Window {
         return entries.compactMap { entry in
             guard entry[kCGWindowLayer] as? Int == 0,
                   (entry[kCGWindowAlpha] as? Double ?? 0) > 0,
+                  let bounds = (entry[kCGWindowBounds] as? NSDictionary).flatMap({ CGRect(dictionaryRepresentation: $0 as CFDictionary) }),
+                  bounds.width >= 100, bounds.height >= 100,
                   let id = entry[kCGWindowNumber] as? CGWindowID,
                   let pid = entry[kCGWindowOwnerPID] as? pid_t,
                   pid != ownPID,

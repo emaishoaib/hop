@@ -32,16 +32,16 @@ struct Window {
         }
     }
 
-    /// Raises this window above its app's other windows and makes its app the active one.
+    /// Brings this window to the front and makes its app the active one, leaving the app's other windows where they are.
     ///
+    /// The window is made its app's main window first, because activating an app brings only its main window forward.
     /// When the window can't be found through Accessibility, the app is still activated.
     func focus() {
-        let app = AXUIElementCreateApplication(pid)
-        if let window = accessibilityWindow(in: app) {
-            AXUIElementPerformAction(window, kAXRaiseAction as CFString)
+        if let window = accessibilityWindow(in: AXUIElementCreateApplication(pid)) {
             AXUIElementSetAttributeValue(window, kAXMainAttribute as CFString, kCFBooleanTrue)
+            AXUIElementPerformAction(window, kAXRaiseAction as CFString)
         }
-        AXUIElementSetAttributeValue(app, kAXFrontmostAttribute as CFString, kCFBooleanTrue)
+        NSRunningApplication(processIdentifier: pid)?.activate(options: [])
     }
 
     /// The Accessibility element for this window, found among its app's windows by window id.

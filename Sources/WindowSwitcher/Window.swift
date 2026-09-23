@@ -68,4 +68,4 @@ struct Window {
 /// This is a private macOS function, but the only reliable way to tie an Accessibility window
 /// to the window id the window list reports. It has been stable for over a decade.
 @_silgen_name("_AXUIElementGetWindow")
-private func _AXUIElementGetWindow(_ element: AXUIElement, _ id: UnsafeMutablePointer<CGWindowID>) -> AXError
+func _AXUIElementGetWindow(_ element: AXUIElement, _ id: UnsafeMutablePointer<CGWindowID>) -> AXError

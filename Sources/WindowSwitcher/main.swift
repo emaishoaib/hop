@@ -4,5 +4,8 @@ import ServiceManagement
 let app = NSApplication.shared
 if SMAppService.mainApp.status == .notRegistered { try? SMAppService.mainApp.register() }
 CGRequestScreenCaptureAccess()
-Hotkeys.start()
+Accessibility.whenTrusted {
+    Hotkeys.start()
+    Recents.start()
+}
 app.run()

@@ -4,31 +4,23 @@ enum Switcher {
     private static var windows: [Window] = []
     private static var selected = 0
 
-    /// Lists the windows for `scope` and selects the one behind the current window.
+    /// Lists the windows for `scope`, selects the one behind the current window, and shows the panel.
     static func open(_ scope: Hotkeys.Scope) {
         windows = Window.onScreen(scope)
         selected = windows.count > 1 ? 1 : 0
-        for (index, window) in windows.enumerated() {
-            print("\(index): \(window.appName) - \(window.title)")
-        }
-        printSelection()
+        Panel.show(windows, selected: selected)
     }
 
     /// Moves the selection to the next window, wrapping around at the end.
     static func next() {
         guard !windows.isEmpty else { return }
         selected = (selected + 1) % windows.count
-        printSelection()
+        Panel.select(selected)
     }
 
-    /// Ends the switch.
+    /// Ends the switch and hides the panel.
     static func release() {
-        printSelection()
+        Panel.hide()
         windows = []
-    }
-
-    private static func printSelection() {
-        guard windows.indices.contains(selected) else { return print("selected: none") }
-        print("selected: \(selected)")
     }
 }

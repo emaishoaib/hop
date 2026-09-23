@@ -2,7 +2,7 @@
 
 A minimal macOS window switcher. It runs in the background, with no Dock or menu bar icon.
 
-- **ption + Tab** shows every window on the current Space.
+- **Option + Tab** shows every window on the current Space.
 - **Option + `** shows only the active app's windows.
 
 Keep holding Option while you pick a window:
@@ -14,7 +14,7 @@ Keep holding Option while you pick a window:
 
 Release Option to switch to the selected window, which is highlighted in blue.
 
-Windows are listed in the order you last used them, so a quick OptionTab takes you back to the previous window. That holds however you got there, whether through Hop, ⌘Tab, the Dock or a click.
+Windows are listed in the order you last used them, so a quick Option + Tab takes you back to the previous window. That holds however you got there, whether through Hop, ⌘Tab, the Dock or a click.
 
 Windows on other Spaces and minimized windows are not shown.
 
@@ -41,7 +41,7 @@ Hop is signed ad hoc, so macOS treats each rebuild as a new app. After a rebuild
 
 ## The ` key
 
-The Option` shortcut uses the physical key that types ` on a US keyboard, not the character. On a keyboard where that key sits somewhere else, the shortcut stays on the same physical key.
+The Option + ` shortcut uses the physical key that types on a US keyboard, not the character. On a keyboard where that key sits somewhere else, the shortcut stays on the same physical key.
 
 ### If Option + ` sometimes does nothing
 

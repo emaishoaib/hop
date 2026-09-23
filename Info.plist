@@ -8,6 +8,8 @@
 	<string>WindowSwitcher</string>
 	<key>CFBundleName</key>
 	<string>WindowSwitcher</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
 	<key>LSUIElement</key>
 	<true/>
 </dict>

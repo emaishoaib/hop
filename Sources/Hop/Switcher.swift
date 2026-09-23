@@ -1,10 +1,14 @@
-/// One switch, from the first press to the ⌥ release: the windows it cycles through and which one is selected.
+import AppKit
+
+/// One switch, from the first press until it closes: the windows it cycles through and which one is selected.
 @MainActor
 enum Switcher {
     private static var windows: [Window] = []
     private static var selected = 0
+    private static var outsideClicks: Any?
 
-    /// Whether a switch is showing windows. It closes on ⌥ release or on a click, whichever comes first.
+    /// Whether a switch is showing windows. It closes on ⌥ release, a click on a window,
+    /// Esc, or a click outside the panel, whichever comes first.
     static var isOpen: Bool { !windows.isEmpty }
 
     /// Lists the windows for `scope`, most recently used first, selects the previous one, and shows the panel.
@@ -12,6 +16,10 @@ enum Switcher {
         windows = Recents.sorted(Window.onScreen(scope))
         selected = windows.count > 1 ? 1 : 0
         Panel.show(windows, selected: selected)
+        guard isOpen else { return }
+        outsideClicks = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]) { _ in
+            MainActor.assumeIsolated { cancel() }
+        }
     }
 
     /// Moves the selection to the next window, wrapping around at the end.
@@ -42,11 +50,25 @@ enum Switcher {
 
     /// Ends the switch: hides the panel and focuses the selected window.
     static func release() {
-        Panel.hide()
-        if windows.indices.contains(selected) {
-            Recents.record(windows[selected].id)
-            windows[selected].focus()
+        let target = windows.indices.contains(selected) ? windows[selected] : nil
+        close()
+        if let target {
+            Recents.record(target.id)
+            target.focus()
         }
+    }
+
+    /// Abandons the switch without focusing anything, leaving you where you were.
+    ///
+    /// A click outside the panel still reaches whatever it lands on.
+    static func cancel() {
+        close()
+    }
+
+    private static func close() {
+        Panel.hide()
         windows = []
+        if let outsideClicks { NSEvent.removeMonitor(outsideClicks) }
+        outsideClicks = nil
     }
 }

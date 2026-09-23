@@ -4,7 +4,7 @@ import Carbon.HIToolbox
 /// Watches the keyboard system-wide for ⌥Tab and ⌥`, and for ⌥ being released.
 ///
 /// The first press opens a switch, each further press while ⌥ is held advances it,
-/// the arrow keys move the selection while it's open, and releasing ⌥ ends it.
+/// the arrow keys move the selection while it's open, Esc abandons it, and releasing ⌥ ends it.
 /// These presses are swallowed so the focused app never sees them.
 @MainActor
 enum Hotkeys {
@@ -38,6 +38,10 @@ enum Hotkeys {
         case .keyDown:
             guard event.flags.contains(.maskAlternate) else { return false }
             let keyCode = Int(event.getIntegerValueField(.keyboardEventKeycode))
+            if Switcher.isOpen, keyCode == kVK_Escape {
+                Switcher.cancel()
+                return true
+            }
             if Switcher.isOpen, let direction = direction(for: keyCode) {
                 Switcher.move(direction)
                 return true

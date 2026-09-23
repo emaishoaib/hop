@@ -10,6 +10,7 @@ Keep holding Option while you pick a window:
 - **Tab or `** moves to the next window.
 - **The arrow keys** move left, right, up and down through the grid.
 - **A click** on a window switches to it straight away. Moving the mouse over the windows does nothing.
+- **Esc**, or a click anywhere outside Hop, closes it without switching.
 
 Release Option to switch to the selected window, which is highlighted in blue.
 

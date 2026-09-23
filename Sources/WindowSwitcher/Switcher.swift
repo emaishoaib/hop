@@ -13,8 +13,21 @@ enum Switcher {
 
     /// Moves the selection to the next window, wrapping around at the end.
     static func next() {
+        move(.right)
+    }
+
+    enum Direction { case left, right, up, down }
+
+    /// Moves the selection one tile left or right, wrapping around, or one row up or down, stopping at the edges.
+    static func move(_ direction: Direction) {
         guard !windows.isEmpty else { return }
-        selected = (selected + 1) % windows.count
+        switch direction {
+        case .left: selected = (selected - 1 + windows.count) % windows.count
+        case .right: selected = (selected + 1) % windows.count
+        case .up where selected - Panel.columns >= 0: selected -= Panel.columns
+        case .down where selected + Panel.columns < windows.count: selected += Panel.columns
+        default: return
+        }
         Panel.select(selected)
     }
 

@@ -5,6 +5,7 @@ import AppKit
 enum Panel {
     private static let panel = makePanel()
     private static var tiles: [Tile] = []
+    private(set) static var columns = 1
     private static let spacing: CGFloat = 8
     private static let padding: CGFloat = 12
 
@@ -12,7 +13,8 @@ enum Panel {
     static func show(_ windows: [Window], selected: Int) {
         guard !windows.isEmpty, let screen = NSScreen.main else { return }
         let area = screen.visibleFrame
-        let (width, columns) = layout(count: windows.count, sample: windows[0], in: NSSize(width: area.width * 0.9, height: area.height * 0.9))
+        let width: CGFloat
+        (width, columns) = layout(count: windows.count, sample: windows[0], in: NSSize(width: area.width * 0.9, height: area.height * 0.9))
         tiles = windows.map { Tile($0, width: width) }
 
         let rows = stride(from: 0, to: tiles.count, by: columns).map { start in

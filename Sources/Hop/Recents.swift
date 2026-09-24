@@ -69,7 +69,9 @@ enum Recents {
     }
 
     /// Records the window that has focus in the app `pid`, which is how a switch to a whole app gets noticed.
-    private static func recordFocusedWindow(of pid: pid_t) {
+    ///
+    /// The switcher also calls it as it opens, to catch a window that appeared while its app was still launching.
+    static func recordFocusedWindow(of pid: pid_t) {
         var value: CFTypeRef?
         guard AXUIElementCopyAttributeValue(AXUIElementCreateApplication(pid), kAXFocusedWindowAttribute as CFString, &value) == .success,
               let value, CFGetTypeID(value) == AXUIElementGetTypeID()

@@ -13,6 +13,7 @@ enum Switcher {
 
     /// Lists the windows for `scope`, most recently used first, selects the previous one, and shows the panel.
     static func open(_ scope: Hotkeys.Scope) {
+        if let pid = NSWorkspace.shared.frontmostApplication?.processIdentifier { Recents.recordFocusedWindow(of: pid) }
         windows = Recents.sorted(Window.onScreen(scope))
         selected = windows.count > 1 ? 1 : 0
         Panel.show(windows, selected: selected)

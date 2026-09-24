@@ -8,6 +8,7 @@ import AppKit
 enum Recents {
     private static var order: [CGWindowID] = []
     private static var observers: [pid_t: AXObserver] = [:]
+    private static var retrying: Set<pid_t> = []
 
     /// Starts following focus in every running app, and in each app as it becomes active.
     static func start() {
@@ -44,11 +45,29 @@ enum Recents {
             .map(\.element)
     }
 
-    /// Starts following the focused window of the app `pid`, unless it's already followed or not ready yet.
+    /// Starts following the focused window of the app `pid`, unless it's already followed or being retried.
     ///
-    /// An app that isn't ready is tried again the next time it becomes active.
+    /// An app that has only just launched may not be ready yet. It's tried again every tenth of a second
+    /// for two seconds, and after that the next time it becomes active.
     private static func watch(_ pid: pid_t) {
-        guard pid != getpid(), observers[pid] == nil else { return }
+        guard pid != getpid(), observers[pid] == nil, !retrying.contains(pid) else { return }
+        retry(pid, attemptsLeft: 20)
+    }
+
+    /// Tries to follow the app `pid`, and schedules another try while it fails and `attemptsLeft` is above zero.
+    private static func retry(_ pid: pid_t, attemptsLeft: Int) {
+        guard !subscribe(pid), attemptsLeft > 0 else {
+            retrying.remove(pid)
+            return
+        }
+        retrying.insert(pid)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            MainActor.assumeIsolated { retry(pid, attemptsLeft: attemptsLeft - 1) }
+        }
+    }
+
+    /// Subscribes to focus changes in the app `pid`, and returns whether it worked.
+    private static func subscribe(_ pid: pid_t) -> Bool {
         var observer: AXObserver?
         AXObserverCreate(pid, { _, window, _, _ in
             var id: CGWindowID = 0
@@ -58,9 +77,10 @@ enum Recents {
         }, &observer)
         guard let observer,
               AXObserverAddNotification(observer, AXUIElementCreateApplication(pid), kAXFocusedWindowChangedNotification as CFString, nil) == .success
-        else { return }
+        else { return false }
         CFRunLoopAddSource(CFRunLoopGetMain(), AXObserverGetRunLoopSource(observer), .commonModes)
         observers[pid] = observer
+        return true
     }
 
     private static func unwatch(_ pid: pid_t) {

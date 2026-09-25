@@ -1,0 +1,32 @@
+# Builds Hop.app when a version tag such as v1.1 is pushed, and publishes it
+# as a zip on a GitHub release for that tag. The tag's number, without the
+# leading v, becomes the app's version.
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set the version from the tag
+        run: plutil -replace CFBundleShortVersionString -string "${GITHUB_REF_NAME#v}" Info.plist
+
+      - name: Build
+        run: ./build.sh
+
+      - name: Zip the app
+        run: ditto -c -k --keepParent Hop.app Hop.zip
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" Hop.zip --title "$GITHUB_REF_NAME" --generate-notes

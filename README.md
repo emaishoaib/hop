@@ -30,6 +30,19 @@ This builds `Hop.app` in this directory. Move it to `/Applications` if you like,
 
 On its first launch, Hop adds itself to System Settings > General > Login Items, so it starts at every login. If you switch it off there, Hop won't switch it back on.
 
+## Releasing
+
+Push a version tag to publish a release:
+
+```bash
+git tag v1.1
+git push origin v1.1
+```
+
+GitHub then builds `Hop.app` and attaches it as `Hop.zip` to a release for that tag. The app's version is the tag's number without the `v`. The version in `Info.plist` is only what a local build reports. The workflow is `.github/workflows/release.yml`.
+
+On a Mac set up with [workshop](https://github.com/emaishoaib/workshop), the next `setup.sh` run replaces the installed Hop with the new release. Its permissions then need granting again, as described under Permissions.
+
 ## Permissions
 
 Hop needs two permissions, which it asks for on its first launch:

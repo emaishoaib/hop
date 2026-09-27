@@ -13,20 +13,11 @@ final class Tile: NSView {
     var onClose: (@MainActor () -> Void)?
     var onQuit: (@MainActor () -> Void)?
 
-    var isSelected = false {
-        didSet {
-            layer?.backgroundColor = isSelected ? NSColor.systemBlue.withAlphaComponent(0.35).cgColor : nil
-            layer?.borderColor = isSelected ? NSColor.systemBlue.cgColor : nil
-            layer?.borderWidth = isSelected ? 2 : 0
-        }
-    }
-
     init(_ window: Window, width: CGFloat) {
         windowID = window.id
         thumbnailWidth = width
         super.init(frame: .zero)
         wantsLayer = true
-        layer?.cornerRadius = 10
 
         let appIcon = NSRunningApplication(processIdentifier: window.pid)?.icon
         thumbnail.image = appIcon
@@ -69,6 +60,17 @@ final class Tile: NSView {
             icon.heightAnchor.constraint(equalToConstant: 16),
             label.widthAnchor.constraint(lessThanOrEqualToConstant: width),
         ])
+    }
+
+    /// Swaps in a freshly captured thumbnail, fading from the old one unless Reduce Motion is on.
+    func fadeIn(_ image: NSImage) {
+        if !Panel.reduceMotion, let layer = thumbnail.layer {
+            let fade = CATransition()
+            fade.type = .fade
+            fade.duration = 0.15
+            layer.add(fade, forKey: "fade")
+        }
+        thumbnail.image = image
     }
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }

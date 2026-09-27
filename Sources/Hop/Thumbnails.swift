@@ -8,7 +8,7 @@ enum Thumbnails {
     private static var cache: [CGWindowID: NSImage] = [:]
 
     /// Shows each tile's last thumbnail right away, then captures every window at once
-    /// and swaps each fresh thumbnail in as soon as it arrives.
+    /// and fades each fresh thumbnail in as soon as it arrives.
     static func load(into tiles: [Tile]) {
         for tile in tiles {
             if let image = cache[tile.windowID] { tile.thumbnail.image = image }
@@ -21,7 +21,7 @@ enum Thumbnails {
                 Task {
                     guard let image = await capture(window, width: tile.thumbnailWidth) else { return }
                     cache[tile.windowID] = image
-                    tile.thumbnail.image = image
+                    tile.fadeIn(image)
                 }
             }
         }

@@ -11,6 +11,7 @@ Keep holding Option while you pick a window:
 - **The arrow keys** move left, right, up and down through the grid.
 - **A click** on a window switches to it straight away. Moving the mouse over the windows does nothing.
 - **The ✕ in a thumbnail's corner** closes that window, the same as its own close button. Hop stays open with the windows that are left.
+- **The power button next to it** quits that window's app, the same as ⌘Q. All of the app's windows leave Hop, and it stays open with the rest.
 - **Esc**, or a click anywhere outside Hop, closes it without switching.
 
 Release Option to switch to the selected window, which is highlighted in blue.
@@ -89,5 +90,4 @@ To uninstall, quit it, switch it off in Login Items, and delete `Hop.app`.
 
 ## Planned
 
-- **Quit buttons.** Each thumbnail gets a button next to its ✕ that quits its app.
 - **Search.** Option + Tab followed by ` opens a search bar above the windows. Option then no longer needs to be held. Typing filters the windows by app name or window title. The arrow keys move through the matches, and Enter switches to the selected one. Esc or a click outside closes it.

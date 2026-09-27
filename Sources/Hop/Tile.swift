@@ -1,6 +1,6 @@
 import AppKit
 
-/// One window in the panel: a thumbnail with the window's title underneath.
+/// One window in the panel: a thumbnail with the app's icon and the window's title underneath.
 ///
 /// The thumbnail starts as the app's icon and is replaced once the capture arrives.
 /// Clicking the tile calls `onClick`, even though the panel's app is never the active one.
@@ -25,14 +25,20 @@ final class Tile: NSView {
         wantsLayer = true
         layer?.cornerRadius = 10
 
-        thumbnail.image = NSRunningApplication(processIdentifier: window.pid)?.icon
+        let appIcon = NSRunningApplication(processIdentifier: window.pid)?.icon
+        thumbnail.image = appIcon
         thumbnail.imageScaling = .scaleProportionallyUpOrDown
 
+        let icon = NSImageView()
+        icon.image = appIcon
+        icon.imageScaling = .scaleProportionallyUpOrDown
         let title = NSTextField(labelWithString: window.label)
-        title.alignment = .center
         title.lineBreakMode = .byTruncatingTail
+        title.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        let label = NSStackView(views: [icon, title])
+        label.spacing = 4
 
-        let column = NSStackView(views: [thumbnail, title])
+        let column = NSStackView(views: [thumbnail, label])
         column.orientation = .vertical
         column.spacing = 6
         column.edgeInsets = NSEdgeInsets(top: 8, left: 8, bottom: 8, right: 8)
@@ -46,7 +52,9 @@ final class Tile: NSView {
             column.bottomAnchor.constraint(equalTo: bottomAnchor),
             thumbnail.widthAnchor.constraint(equalToConstant: width),
             thumbnail.heightAnchor.constraint(equalToConstant: width * 0.625),
-            title.widthAnchor.constraint(equalToConstant: width),
+            icon.widthAnchor.constraint(equalToConstant: 16),
+            icon.heightAnchor.constraint(equalToConstant: 16),
+            label.widthAnchor.constraint(lessThanOrEqualToConstant: width),
         ])
     }
 

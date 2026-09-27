@@ -18,6 +18,8 @@ Windows are listed in the order you last used them, so a quick Option + Tab take
 
 Windows on other Spaces and minimized windows are not shown.
 
+Each window is labelled with its title. A VS Code window is labelled with the name of the git repo holding its open file instead. When it shows something that isn't a file, such as a diff, it's labelled with the name of the folder open in VS Code.
+
 ## Build and open
 
 Needs macOS 14 or later and the Xcode Command Line Tools (`xcode-select --install`).
@@ -83,3 +85,9 @@ pkill -x Hop
 ```
 
 To uninstall, quit it, switch it off in Login Items, and delete `Hop.app`.
+
+## Planned
+
+- **App icons.** Each window's title starts with its app's icon.
+- **Close and quit buttons.** Each thumbnail gets two buttons in its top right corner. One closes that window, and the other quits its app.
+- **Search.** Option + Tab followed by ` opens a search bar above the windows. Option then no longer needs to be held. Typing filters the windows by app name or window title. The arrow keys move through the matches, and Enter switches to the selected one. Esc or a click outside closes it.

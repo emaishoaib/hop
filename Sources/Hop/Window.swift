@@ -38,9 +38,10 @@ struct Window {
     /// What the switcher shows under this window.
     ///
     /// For a VS Code window on a file inside a git repo, this is the repo's name.
+    /// For a VS Code window on something that isn't a file, such as a diff, it's the name of the folder open in VS Code.
     /// Otherwise it's the window's title, or the app's name when the window has no title.
     var label: String {
-        vsCodeRepoName ?? (title.isEmpty ? appName : title)
+        vsCodeRepoName ?? vsCodeFolderName ?? (title.isEmpty ? appName : title)
     }
 
     /// The name of the git repo holding the file open in this window, when this is a VS Code window.
@@ -62,6 +63,15 @@ struct Window {
             folder.deleteLastPathComponent()
         }
         return nil
+    }
+
+    /// The name of the folder open in this window, read from its title, when this is a VS Code window.
+    ///
+    /// VS Code titles its windows `<tab> — <folder>`, so the folder is the piece after the first ` — `.
+    private var vsCodeFolderName: String? {
+        guard NSRunningApplication(processIdentifier: pid)?.bundleIdentifier == "com.microsoft.VSCode" else { return nil }
+        let pieces = title.components(separatedBy: " — ")
+        return pieces.count > 1 ? pieces[1] : nil
     }
 
     /// Brings this window to the front and makes its app the active one, leaving the app's other windows where they are.

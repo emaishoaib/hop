@@ -3,7 +3,7 @@ import AppKit
 /// The floating panel that shows one switch's windows in a grid and highlights the selected one.
 ///
 /// It animates briefly unless Reduce Motion is on: it fades in and out, the highlight slides between tiles,
-/// and when tiles are taken out, the rest slide into their new places while the panel resizes.
+/// and when tiles are taken out, they fade away while the rest slide into their new places and the panel resizes.
 @MainActor
 enum Panel {
     private static let panel = makePanel()
@@ -29,6 +29,7 @@ enum Panel {
         let wasShowing = isShowing
         let before = wasShowing ? Dictionary(uniqueKeysWithValues: tiles.compactMap { tile in screenFrame(of: tile).map { (tile.windowID, $0) } }) : [:]
         let highlightBefore = wasShowing ? screenFrame(of: highlight) : nil
+        let leaving = tiles.filter { tile in !windows.contains { $0.id == tile.windowID } }
 
         let area = screen.visibleFrame
         let width: CGFloat
@@ -63,6 +64,7 @@ enum Panel {
 
         if wasShowing && !reduceMotion {
             slide(from: before)
+            fadeOut(leaving, from: before, onto: grid)
             if let highlightBefore { highlight.frame = grid.convert(panel.convertFromScreen(highlightBefore), from: nil) }
             NSAnimationContext.runAnimationGroup { context in
                 context.duration = 0.2
@@ -120,6 +122,38 @@ enum Panel {
             move.duration = 0.2
             move.timingFunction = CAMediaTimingFunction(name: .easeOut)
             layer.add(move, forKey: "slide")
+        }
+    }
+
+    /// Moves each tile in `leaving` onto `grid`, back where it was on screen according to `before`,
+    /// and fades and shrinks it away while the other tiles slide into their new places.
+    ///
+    /// A leaving tile no longer responds to clicks, since its window is already out of the switch.
+    private static func fadeOut(_ leaving: [Tile], from before: [CGWindowID: NSRect], onto grid: NSView) {
+        for tile in leaving {
+            guard let old = before[tile.windowID] else { continue }
+            tile.onClick = nil
+            tile.onClose = nil
+            tile.onQuit = nil
+            tile.removeFromSuperview()
+            tile.translatesAutoresizingMaskIntoConstraints = true
+            tile.frame = grid.convert(panel.convertFromScreen(old), from: nil)
+            grid.addSubview(tile)
+
+            let shrink = CABasicAnimation(keyPath: "transform")
+            shrink.fromValue = NSValue(caTransform3D: CATransform3DIdentity)
+            shrink.toValue = NSValue(caTransform3D: scaled(tile.bounds, by: 0.9))
+            shrink.duration = 0.15
+            shrink.timingFunction = CAMediaTimingFunction(name: .easeIn)
+            shrink.fillMode = .forwards
+            shrink.isRemovedOnCompletion = false
+            tile.layer?.add(shrink, forKey: "shrink")
+            NSAnimationContext.runAnimationGroup({ context in
+                context.duration = 0.15
+                tile.animator().alphaValue = 0
+            }, completionHandler: {
+                MainActor.assumeIsolated { tile.removeFromSuperview() }
+            })
         }
     }
 

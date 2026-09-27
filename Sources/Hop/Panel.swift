@@ -72,6 +72,7 @@ enum Panel {
             }
         } else {
             panel.setFrame(frame, display: true)
+            grid.setFrameOrigin(.zero)
             highlight.isHidden = !wasShowing
         }
         select(selected)

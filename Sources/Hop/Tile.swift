@@ -54,6 +54,7 @@ final class Tile: NSView {
             column.trailingAnchor.constraint(equalTo: trailingAnchor),
             column.topAnchor.constraint(equalTo: topAnchor),
             column.bottomAnchor.constraint(equalTo: bottomAnchor),
+            widthAnchor.constraint(equalToConstant: width + column.edgeInsets.left + column.edgeInsets.right),
             thumbnail.widthAnchor.constraint(equalToConstant: width),
             thumbnail.heightAnchor.constraint(equalToConstant: width * 0.625),
             icon.widthAnchor.constraint(equalToConstant: 16),

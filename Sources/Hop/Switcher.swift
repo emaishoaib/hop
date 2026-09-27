@@ -43,6 +43,25 @@ enum Switcher {
         Panel.select(selected)
     }
 
+    /// Closes the window at `index` and takes it out of the switch, which stays open unless no windows are left.
+    static func closeWindow(_ index: Int) {
+        guard windows.indices.contains(index) else { return }
+        let window = windows[index]
+        window.close()
+        remove { $0.id == window.id }
+    }
+
+    /// Takes the windows matching `isGone` out of the switch and shows the rest, keeping the same window selected when it's still there.
+    ///
+    /// When no windows are left, the switch ends.
+    private static func remove(where isGone: (Window) -> Bool) {
+        let selectedID = windows[selected].id
+        windows.removeAll(where: isGone)
+        guard isOpen else { return cancel() }
+        selected = windows.firstIndex { $0.id == selectedID } ?? min(selected, windows.count - 1)
+        Panel.show(windows, selected: selected)
+    }
+
     /// Ends the switch on the window at `index`, without waiting for ⌥ to be released.
     static func pick(_ index: Int) {
         selected = index

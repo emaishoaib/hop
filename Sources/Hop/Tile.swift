@@ -4,11 +4,13 @@ import AppKit
 ///
 /// The thumbnail starts as the app's icon and is replaced once the capture arrives.
 /// Clicking the tile calls `onClick`, even though the panel's app is never the active one.
+/// The ✕ in the thumbnail's top-right corner calls `onClose` instead.
 final class Tile: NSView {
     let windowID: CGWindowID
     let thumbnailWidth: CGFloat
     let thumbnail = NSImageView()
     var onClick: (@MainActor () -> Void)?
+    var onClose: (@MainActor () -> Void)?
 
     var isSelected = false {
         didSet {
@@ -45,7 +47,14 @@ final class Tile: NSView {
         column.translatesAutoresizingMaskIntoConstraints = false
         addSubview(column)
 
+        let buttons = NSStackView(views: [CornerButton("xmark.circle.fill", "Close window", target: self, action: #selector(closePressed))])
+        buttons.spacing = 4
+        buttons.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(buttons)
+
         NSLayoutConstraint.activate([
+            buttons.topAnchor.constraint(equalTo: thumbnail.topAnchor, constant: 4),
+            buttons.trailingAnchor.constraint(equalTo: thumbnail.trailingAnchor, constant: -4),
             column.leadingAnchor.constraint(equalTo: leadingAnchor),
             column.trailingAnchor.constraint(equalTo: trailingAnchor),
             column.topAnchor.constraint(equalTo: topAnchor),
@@ -64,5 +73,27 @@ final class Tile: NSView {
         onClick?()
     }
 
+    @objc private func closePressed() {
+        onClose?()
+    }
+
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
+}
+
+/// A round button for a thumbnail's top-right corner: a white symbol on a dark circle, so it shows up on any thumbnail.
+///
+/// Like the tile, it works on the first click even though the panel's app is never the active one.
+private final class CornerButton: NSButton {
+    convenience init(_ symbol: String, _ description: String, target: AnyObject, action: Selector) {
+        self.init(frame: .zero)
+        let colors = NSImage.SymbolConfiguration(paletteColors: [.white, NSColor.black.withAlphaComponent(0.6)])
+        image = NSImage(systemSymbolName: symbol, accessibilityDescription: description)?
+            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 18, weight: .regular).applying(colors))
+        isBordered = false
+        toolTip = description
+        self.target = target
+        self.action = action
+    }
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 }

@@ -86,6 +86,16 @@ struct Window {
         NSRunningApplication(processIdentifier: pid)?.activate(options: [])
     }
 
+    /// Asks this window to close, the same as clicking its close button, so the app can still ask to save first.
+    func close() {
+        var button: CFTypeRef?
+        guard let window = accessibilityWindow(in: AXUIElementCreateApplication(pid)),
+              AXUIElementCopyAttributeValue(window, kAXCloseButtonAttribute as CFString, &button) == .success,
+              let button, CFGetTypeID(button) == AXUIElementGetTypeID()
+        else { return }
+        AXUIElementPerformAction(button as! AXUIElement, kAXPressAction as CFString)
+    }
+
     /// The Accessibility element for this window, found among its app's windows by window id.
     private func accessibilityWindow(in app: AXUIElement) -> AXUIElement? {
         var value: CFTypeRef?

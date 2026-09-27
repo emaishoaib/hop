@@ -4,13 +4,14 @@ import AppKit
 ///
 /// The thumbnail starts as the app's icon and is replaced once the capture arrives.
 /// Clicking the tile calls `onClick`, even though the panel's app is never the active one.
-/// The ✕ in the thumbnail's top-right corner calls `onClose` instead.
+/// The two buttons in the thumbnail's top-right corner call `onQuit` and `onClose` instead.
 final class Tile: NSView {
     let windowID: CGWindowID
     let thumbnailWidth: CGFloat
     let thumbnail = NSImageView()
     var onClick: (@MainActor () -> Void)?
     var onClose: (@MainActor () -> Void)?
+    var onQuit: (@MainActor () -> Void)?
 
     var isSelected = false {
         didSet {
@@ -47,7 +48,10 @@ final class Tile: NSView {
         column.translatesAutoresizingMaskIntoConstraints = false
         addSubview(column)
 
-        let buttons = NSStackView(views: [CornerButton("xmark.circle.fill", "Close window", target: self, action: #selector(closePressed))])
+        let buttons = NSStackView(views: [
+            CornerButton("power.circle.fill", "Quit app", target: self, action: #selector(quitPressed)),
+            CornerButton("xmark.circle.fill", "Close window", target: self, action: #selector(closePressed)),
+        ])
         buttons.spacing = 4
         buttons.translatesAutoresizingMaskIntoConstraints = false
         addSubview(buttons)
@@ -75,6 +79,10 @@ final class Tile: NSView {
 
     @objc private func closePressed() {
         onClose?()
+    }
+
+    @objc private func quitPressed() {
+        onQuit?()
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }

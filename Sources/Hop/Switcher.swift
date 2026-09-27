@@ -51,6 +51,14 @@ enum Switcher {
         remove { $0.id == window.id }
     }
 
+    /// Quits the app that owns the window at `index`, the same as ⌘Q, and takes all its windows out of the switch.
+    static func quitApp(_ index: Int) {
+        guard windows.indices.contains(index) else { return }
+        let pid = windows[index].pid
+        NSRunningApplication(processIdentifier: pid)?.terminate()
+        remove { $0.pid == pid }
+    }
+
     /// Takes the windows matching `isGone` out of the switch and shows the rest, keeping the same window selected when it's still there.
     ///
     /// When no windows are left, the switch ends.

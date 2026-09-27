@@ -19,6 +19,7 @@ enum Panel {
         for (index, tile) in tiles.enumerated() {
             tile.onClick = { Switcher.pick(index) }
             tile.onClose = { Switcher.closeWindow(index) }
+            tile.onQuit = { Switcher.quitApp(index) }
         }
 
         let rows = stride(from: 0, to: tiles.count, by: columns).map { start in

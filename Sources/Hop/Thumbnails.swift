@@ -9,15 +9,20 @@ enum Thumbnails {
 
     /// Shows each tile's last thumbnail right away, then captures every window at once
     /// and fades each fresh thumbnail in as soon as it arrives.
+    ///
+    /// A window that is off screen, such as a hidden app's, keeps the thumbnail taken while it was on screen.
+    /// It's only captured when there is no such thumbnail. Thumbnails are dropped once their window is closed.
     static func load(into tiles: [Tile]) {
         for tile in tiles {
             if let image = cache[tile.windowID] { tile.thumbnail.image = image }
         }
         Task {
-            guard let content = try? await SCShareableContent.excludingDesktopWindows(true, onScreenWindowsOnly: true) else { return }
+            guard let content = try? await SCShareableContent.excludingDesktopWindows(true, onScreenWindowsOnly: false) else { return }
             cache = cache.filter { id, _ in content.windows.contains { $0.windowID == id } }
             for tile in tiles {
-                guard let window = content.windows.first(where: { $0.windowID == tile.windowID }) else { continue }
+                guard let window = content.windows.first(where: { $0.windowID == tile.windowID }),
+                      window.isOnScreen || cache[tile.windowID] == nil
+                else { continue }
                 Task {
                     guard let image = await capture(window, width: tile.thumbnailWidth) else { return }
                     cache[tile.windowID] = image

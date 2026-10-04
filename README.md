@@ -18,6 +18,8 @@ Release Option to switch to the selected window, which is highlighted in blue.
 
 Windows are listed in the order you last used them, so a quick Option + Tab takes you back to the previous window. That holds however you got there, whether through Hop, ⌘Tab, the Dock or a click.
 
+The windows of an app you've hidden with ⌘H are listed too. Picking one shows the app again, which brings back all of its windows.
+
 Windows on other Spaces and minimized windows are not shown.
 
 Each window is labelled with its app's icon and its title. A VS Code window is labelled with the name of the git repo holding its open file instead. When it shows something that isn't a file, such as a diff, it's labelled with the name of the folder open in VS Code.

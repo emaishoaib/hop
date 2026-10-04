@@ -20,7 +20,8 @@ struct Window {
     /// The minimized windows, and every window of a hidden app. These are off screen until they're switched to.
     ///
     /// They're read through Accessibility, because the window list also reports apps' off-screen helper windows
-    /// and gives no way to tell them apart.
+    /// and gives no way to tell them apart. An app that doesn't answer within a quarter of a second is skipped,
+    /// so a frozen app can't hold the switch up.
     @MainActor
     private static func offScreen(_ scope: Hotkeys.Scope) -> [Window] {
         let frontmostPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
@@ -29,7 +30,9 @@ struct Window {
             .flatMap { app in
                 var value: CFTypeRef?
                 let pid = app.processIdentifier
-                guard AXUIElementCopyAttributeValue(AXUIElementCreateApplication(pid), kAXWindowsAttribute as CFString, &value) == .success,
+                let element = AXUIElementCreateApplication(pid)
+                AXUIElementSetMessagingTimeout(element, 0.25)
+                guard AXUIElementCopyAttributeValue(element, kAXWindowsAttribute as CFString, &value) == .success,
                       let windows = value as? [AXUIElement]
                 else { return [Window]() }
                 return windows.compactMap { window in

@@ -7,12 +7,44 @@ struct Window {
     let appName: String
     let title: String
 
-    /// The normal app windows on screen, frontmost first.
+    /// The windows a switch lists: the normal app windows on screen, frontmost first, then the windows of hidden apps.
     ///
     /// Windows under 100 points in either direction are skipped, since those are apps' helper windows,
-    /// not windows you'd switch to. For `.activeApp`, only the frontmost app's windows are kept.
+    /// not windows you'd switch to. For `.activeApp`, only the frontmost app's windows are kept,
+    /// and the frontmost app is never a hidden one.
     @MainActor
-    static func onScreen(_ scope: Hotkeys.Scope) -> [Window] {
+    static func listed(_ scope: Hotkeys.Scope) -> [Window] {
+        scope == .allApps ? onScreen(scope) + inHiddenApps() : onScreen(scope)
+    }
+
+    /// The windows of hidden apps, which are off screen until their app is shown again.
+    ///
+    /// They're read through Accessibility, because the window list also reports a hidden app's helper windows
+    /// and gives no way to tell them apart. Minimized windows are skipped.
+    @MainActor
+    private static func inHiddenApps() -> [Window] {
+        NSWorkspace.shared.runningApplications
+            .filter { $0.isHidden && $0.activationPolicy == .regular }
+            .flatMap { app in
+                var value: CFTypeRef?
+                let pid = app.processIdentifier
+                guard AXUIElementCopyAttributeValue(AXUIElementCreateApplication(pid), kAXWindowsAttribute as CFString, &value) == .success,
+                      let windows = value as? [AXUIElement]
+                else { return [Window]() }
+                return windows.compactMap { window in
+                    var id: CGWindowID = 0
+                    var minimized: CFTypeRef?
+                    var title: CFTypeRef?
+                    AXUIElementCopyAttributeValue(window, kAXMinimizedAttribute as CFString, &minimized)
+                    AXUIElementCopyAttributeValue(window, kAXTitleAttribute as CFString, &title)
+                    guard _AXUIElementGetWindow(window, &id) == .success, minimized as? Bool != true else { return nil }
+                    return Window(id: id, pid: pid, appName: app.localizedName ?? "", title: title as? String ?? "")
+                }
+            }
+    }
+
+    @MainActor
+    private static func onScreen(_ scope: Hotkeys.Scope) -> [Window] {
         let entries = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[CFString: Any]] ?? []
         let ownPID = getpid()
         let frontmostPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
@@ -78,12 +110,15 @@ struct Window {
     ///
     /// The window is made its app's main window first, because activating an app brings only its main window forward.
     /// When the window can't be found through Accessibility, the app is still activated.
+    /// A hidden app is shown again first, which brings back all of its windows.
     func focus() {
+        let app = NSRunningApplication(processIdentifier: pid)
+        app?.unhide()
         if let window = accessibilityWindow(in: AXUIElementCreateApplication(pid)) {
             AXUIElementSetAttributeValue(window, kAXMainAttribute as CFString, kCFBooleanTrue)
             AXUIElementPerformAction(window, kAXRaiseAction as CFString)
         }
-        NSRunningApplication(processIdentifier: pid)?.activate(options: [])
+        app?.activate(options: [])
     }
 
     /// Asks this window to close, the same as clicking its close button, so the app can still ask to save first.

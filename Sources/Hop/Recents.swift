@@ -20,7 +20,7 @@ enum Recents {
             guard let pid = (note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication)?.processIdentifier else { return }
             MainActor.assumeIsolated {
                 watch(pid)
-                recordFocusedWindow(of: pid)
+                recordFocusedWindow(of: pid, attemptsLeft: 20)
             }
         }
         _ = center.addObserver(forName: NSWorkspace.didTerminateApplicationNotification, object: nil, queue: .main) { note in
@@ -88,15 +88,33 @@ enum Recents {
         CFRunLoopRemoveSource(CFRunLoopGetMain(), AXObserverGetRunLoopSource(observer), .commonModes)
     }
 
-    /// Records the window that has focus in the app `pid`, which is how a switch to a whole app gets noticed.
+    /// Records the window that has focus in the app `pid`, which is how a switch to a whole app gets noticed,
+    /// and returns whether the app said which window that is.
     ///
     /// The switcher also calls it as it opens, to catch a window that appeared while its app was still launching.
-    static func recordFocusedWindow(of pid: pid_t) {
+    @discardableResult
+    static func recordFocusedWindow(of pid: pid_t) -> Bool {
         var value: CFTypeRef?
         guard AXUIElementCopyAttributeValue(AXUIElementCreateApplication(pid), kAXFocusedWindowAttribute as CFString, &value) == .success,
               let value, CFGetTypeID(value) == AXUIElementGetTypeID()
-        else { return }
+        else { return false }
         var id: CGWindowID = 0
-        if _AXUIElementGetWindow(value as! AXUIElement, &id) == .success { record(id) }
+        guard _AXUIElementGetWindow(value as! AXUIElement, &id) == .success else { return false }
+        record(id)
+        return true
+    }
+
+    /// Records the focused window of the app `pid`, which has just become active, trying again while the app doesn't answer.
+    ///
+    /// An app can be too busy to answer at the moment it becomes active. It's asked again every tenth of a second
+    /// while `attemptsLeft` is above zero, and no longer once another app is the active one.
+    private static func recordFocusedWindow(of pid: pid_t, attemptsLeft: Int) {
+        guard !recordFocusedWindow(of: pid), attemptsLeft > 0 else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            MainActor.assumeIsolated {
+                guard NSWorkspace.shared.frontmostApplication?.processIdentifier == pid else { return }
+                recordFocusedWindow(of: pid, attemptsLeft: attemptsLeft - 1)
+            }
+        }
     }
 }

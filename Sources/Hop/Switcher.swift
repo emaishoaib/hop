@@ -61,12 +61,22 @@ enum Switcher {
         Panel.select(selected)
     }
 
-    /// Closes the window at `index` and takes it out of the switch, which stays open unless no windows are left.
+    /// Asks the window at `index` to close and takes it out of the switch once it has, which stays open unless no windows are left.
+    ///
+    /// The window is checked every 50 milliseconds for two seconds, or until this switch ends.
+    /// When it's still there after that, such as when its app is asking whether to save changes, it stays in the switch.
     static func closeWindow(_ index: Int) {
         guard windows.indices.contains(index) else { return }
         let window = windows[index]
+        let number = number
         window.close()
-        remove { $0.id == window.id }
+        Task {
+            for _ in 0..<40 {
+                guard isOpen, self.number == number else { return }
+                if window.isClosed { return remove { $0.id == window.id } }
+                try? await Task.sleep(for: .milliseconds(50))
+            }
+        }
     }
 
     /// Quits the app that owns the window at `index`, the same as ⌘Q, and takes all its windows out of the switch.

@@ -164,6 +164,23 @@ struct Window {
         AXUIElementPerformAction(button as! AXUIElement, kAXPressAction as CFString)
     }
 
+    /// Whether this window is gone: its app has quit, or no longer reports it through Accessibility.
+    ///
+    /// An app that doesn't answer within a quarter of a second counts as still having the window.
+    var isClosed: Bool {
+        guard let app = NSRunningApplication(processIdentifier: pid), !app.isTerminated else { return true }
+        var value: CFTypeRef?
+        let element = AXUIElementCreateApplication(pid)
+        AXUIElementSetMessagingTimeout(element, 0.25)
+        guard AXUIElementCopyAttributeValue(element, kAXWindowsAttribute as CFString, &value) == .success,
+              let windows = value as? [AXUIElement]
+        else { return false }
+        return !windows.contains { window in
+            var windowID: CGWindowID = 0
+            return _AXUIElementGetWindow(window, &windowID) == .success && windowID == id
+        }
+    }
+
     /// The Accessibility element for this window, found among its app's windows by window id.
     private func accessibilityWindow(in app: AXUIElement) -> AXUIElement? {
         var value: CFTypeRef?

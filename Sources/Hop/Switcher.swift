@@ -11,6 +11,17 @@ enum Switcher {
     /// Esc, or a click outside the panel, whichever comes first.
     static var isOpen: Bool { !windows.isEmpty }
 
+    /// Carries out what a key press asked of the switch.
+    static func perform(_ action: Hotkeys.Action) {
+        switch action {
+        case .open(let scope): open(scope)
+        case .next: next()
+        case .move(let direction): move(direction)
+        case .cancel: cancel()
+        case .release: release()
+        }
+    }
+
     /// Lists the windows for `scope`, most recently used first, selects the previous one, and shows the panel.
     static func open(_ scope: Hotkeys.Scope) {
         if let pid = NSWorkspace.shared.frontmostApplication?.processIdentifier { Recents.recordFocusedWindow(of: pid) }

@@ -10,6 +10,15 @@ import Carbon.HIToolbox
 enum Hotkeys {
     enum Scope { case allApps, activeApp }
 
+    /// What a key press asks of the switch.
+    enum Action {
+        case open(Scope)
+        case next
+        case move(Switcher.Direction)
+        case cancel
+        case release
+    }
+
     private static var tap: CFMachPort?
 
     /// Starts listening to the keyboard. Needs Accessibility permission.
@@ -30,37 +39,35 @@ enum Hotkeys {
         CFRunLoopAddSource(CFRunLoopGetMain(), CFMachPortCreateRunLoopSource(nil, tap, 0), .commonModes)
     }
 
-    /// Updates the switch state for one event and returns whether to swallow it.
+    /// Handles one event from the tap and returns whether to swallow it.
+    ///
+    /// A key press that the switch acts on is swallowed. ⌥ being released never is.
+    /// When macOS has switched the tap off, it's switched back on.
     private static func handle(_ type: CGEventType, _ event: CGEvent) -> Bool {
-        switch type {
-        case .tapDisabledByTimeout, .tapDisabledByUserInput:
+        if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
             if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
-        case .keyDown:
-            guard event.flags.contains(.maskAlternate) else { return false }
-            let keyCode = Int(event.getIntegerValueField(.keyboardEventKeycode))
-            if Switcher.isOpen, keyCode == kVK_Escape {
-                Switcher.cancel()
-                return true
-            }
-            if Switcher.isOpen, let direction = direction(for: keyCode) {
-                Switcher.move(direction)
-                return true
-            }
-            guard let scope = scope(for: keyCode) else { return false }
-            if Switcher.isOpen {
-                Switcher.next()
-            } else {
-                Switcher.open(scope)
-            }
-            return true
-        case .flagsChanged:
-            if Switcher.isOpen, !event.flags.contains(.maskAlternate) {
-                Switcher.release()
-            }
-        default:
-            break
+            return false
         }
-        return false
+        guard let action = decide(type, event) else { return false }
+        Switcher.perform(action)
+        return type == .keyDown
+    }
+
+    /// What one event asks of the switch, or nil when the event isn't one of Hop's.
+    private static func decide(_ type: CGEventType, _ event: CGEvent) -> Action? {
+        let optionHeld = event.flags.contains(.maskAlternate)
+        switch type {
+        case .keyDown where optionHeld:
+            let keyCode = Int(event.getIntegerValueField(.keyboardEventKeycode))
+            if Switcher.isOpen, keyCode == kVK_Escape { return .cancel }
+            if Switcher.isOpen, let direction = direction(for: keyCode) { return .move(direction) }
+            guard let scope = scope(for: keyCode) else { return nil }
+            return Switcher.isOpen ? .next : .open(scope)
+        case .flagsChanged where Switcher.isOpen && !optionHeld:
+            return .release
+        default:
+            return nil
+        }
     }
 
     /// The scope a key opens, or nil when it isn't Tab or `.

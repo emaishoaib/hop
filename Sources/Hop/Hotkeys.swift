@@ -7,7 +7,10 @@ import os
 /// The first press opens a switch, each further press while ⌥ is held advances it,
 /// the arrow keys move the selection while it's open, Esc abandons it, and releasing ⌥ ends it.
 /// These presses are swallowed so the focused app never sees them.
-@MainActor
+///
+/// macOS holds every key press back until Hop has said whether to swallow it. That answer is given on a thread
+/// of its own, which does nothing else, so the keyboard keeps working however busy the main thread is.
+/// What a key press asks for is handed to the main thread and carried out there afterwards.
 enum Hotkeys {
     enum Scope { case allApps, activeApp }
 
@@ -28,30 +31,37 @@ enum Hotkeys {
         var count = 0
     }
 
-    private static var tap: CFMachPort?
+    /// The keyboard event tap. It's created on the keyboard thread and only ever used there.
+    private nonisolated(unsafe) static var tap: CFMachPort?
     private static let switches = OSAllocatedUnfairLock(initialState: Switches())
 
-    /// Starts listening to the keyboard. Needs Accessibility permission.
+    /// Starts listening to the keyboard on a thread of its own. Needs Accessibility permission.
     static func start() {
-        let mask = CGEventMask(1 << CGEventType.keyDown.rawValue | 1 << CGEventType.flagsChanged.rawValue)
-        tap = CGEvent.tapCreate(
-            tap: .cgSessionEventTap,
-            place: .headInsertEventTap,
-            options: .defaultTap,
-            eventsOfInterest: mask,
-            callback: { _, type, event, _ in
-                let swallow = MainActor.assumeIsolated { Hotkeys.handle(type, event) }
-                return swallow ? nil : Unmanaged.passUnretained(event)
-            },
-            userInfo: nil
-        )
-        guard let tap else { fatalError("Could not create the keyboard event tap") }
-        CFRunLoopAddSource(CFRunLoopGetMain(), CFMachPortCreateRunLoopSource(nil, tap, 0), .commonModes)
+        let thread = Thread {
+            let mask = CGEventMask(1 << CGEventType.keyDown.rawValue | 1 << CGEventType.flagsChanged.rawValue)
+            tap = CGEvent.tapCreate(
+                tap: .cgSessionEventTap,
+                place: .headInsertEventTap,
+                options: .defaultTap,
+                eventsOfInterest: mask,
+                callback: { _, type, event, _ in
+                    Hotkeys.handle(type, event) ? nil : Unmanaged.passUnretained(event)
+                },
+                userInfo: nil
+            )
+            guard let tap else { fatalError("Could not create the keyboard event tap") }
+            CFRunLoopAddSource(CFRunLoopGetCurrent(), CFMachPortCreateRunLoopSource(nil, tap, 0), .commonModes)
+            CFRunLoopRun()
+        }
+        thread.name = "Hop keyboard"
+        thread.qualityOfService = .userInteractive
+        thread.start()
     }
 
-    /// Handles one event from the tap and returns whether to swallow it.
+    /// Handles one event from the tap, on the keyboard thread, and returns whether to swallow it.
     ///
     /// A key press that the switch acts on is swallowed. ⌥ being released never is.
+    /// What the event asks for is handed to the main thread, without waiting for it to be carried out.
     /// When macOS has switched the tap off, it's switched back on.
     private static func handle(_ type: CGEventType, _ event: CGEvent) -> Bool {
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
@@ -59,7 +69,7 @@ enum Hotkeys {
             return false
         }
         guard let action = decide(type, event) else { return false }
-        Switcher.perform(action)
+        DispatchQueue.main.async { Switcher.perform(action) }
         return type == .keyDown
     }
 

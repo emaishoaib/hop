@@ -58,9 +58,12 @@ enum Panel {
 
         let size = grid.fittingSize
         let frame = NSRect(x: area.midX - size.width / 2, y: area.midY - size.height / 2, width: size.width, height: size.height)
-        grid.frame = NSRect(x: (content.bounds.width - size.width) / 2, y: (content.bounds.height - size.height) / 2, width: size.width, height: size.height)
-        grid.autoresizingMask = [.minXMargin, .maxXMargin, .minYMargin, .maxYMargin]
-        grid.layoutSubtreeIfNeeded()
+        grid.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            grid.centerXAnchor.constraint(equalTo: content.centerXAnchor),
+            grid.centerYAnchor.constraint(equalTo: content.centerYAnchor),
+        ])
+        content.layoutSubtreeIfNeeded()
 
         if wasShowing && !reduceMotion {
             slide(from: before)
@@ -72,7 +75,6 @@ enum Panel {
             }
         } else {
             panel.setFrame(frame, display: true)
-            grid.setFrameOrigin(.zero)
             highlight.isHidden = !wasShowing
         }
         select(selected)

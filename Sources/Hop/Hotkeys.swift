@@ -1,5 +1,6 @@
 import AppKit
 import Carbon.HIToolbox
+import os
 
 /// Watches the keyboard system-wide for ⌥Tab and ⌥`, and for ⌥ being released.
 ///
@@ -11,15 +12,24 @@ enum Hotkeys {
     enum Scope { case allApps, activeApp }
 
     /// What a key press asks of the switch.
+    ///
+    /// Opening carries the number of the switch it opens, which `switchEnded` takes back.
     enum Action {
-        case open(Scope)
+        case open(Scope, number: Int)
         case next
         case move(Switcher.Direction)
         case cancel
         case release
     }
 
+    /// Whether a switch is open as far as key presses go, and how many have been opened so far.
+    private struct Switches {
+        var isOpen = false
+        var count = 0
+    }
+
     private static var tap: CFMachPort?
+    private static let switches = OSAllocatedUnfairLock(initialState: Switches())
 
     /// Starts listening to the keyboard. Needs Accessibility permission.
     static func start() {
@@ -54,19 +64,43 @@ enum Hotkeys {
     }
 
     /// What one event asks of the switch, or nil when the event isn't one of Hop's.
+    ///
+    /// Whether a switch is open is read from `switches` and updated there in the same step,
+    /// so the answer never depends on how far the switcher has got with earlier key presses.
     private static func decide(_ type: CGEventType, _ event: CGEvent) -> Action? {
         let optionHeld = event.flags.contains(.maskAlternate)
-        switch type {
-        case .keyDown where optionHeld:
-            let keyCode = Int(event.getIntegerValueField(.keyboardEventKeycode))
-            if Switcher.isOpen, keyCode == kVK_Escape { return .cancel }
-            if Switcher.isOpen, let direction = direction(for: keyCode) { return .move(direction) }
-            guard let scope = scope(for: keyCode) else { return nil }
-            return Switcher.isOpen ? .next : .open(scope)
-        case .flagsChanged where Switcher.isOpen && !optionHeld:
-            return .release
-        default:
-            return nil
+        let keyCode = Int(event.getIntegerValueField(.keyboardEventKeycode))
+        let direction = direction(for: keyCode)
+        let scope = scope(for: keyCode)
+        return switches.withLock { switches in
+            switch type {
+            case .keyDown where optionHeld:
+                if switches.isOpen, keyCode == kVK_Escape {
+                    switches.isOpen = false
+                    return .cancel
+                }
+                if switches.isOpen, let direction { return .move(direction) }
+                guard let scope else { return nil }
+                if switches.isOpen { return .next }
+                switches.isOpen = true
+                switches.count += 1
+                return .open(scope, number: switches.count)
+            case .flagsChanged where switches.isOpen && !optionHeld:
+                switches.isOpen = false
+                return .release
+            default:
+                return nil
+            }
+        }
+    }
+
+    /// Tells the keyboard that switch `number` has ended, however it ended.
+    ///
+    /// The switcher calls this for every switch it closes, since a switch can also end on a click or by running out of windows.
+    /// It's ignored when a newer switch has been opened since, so a late report can't mark that one as closed.
+    static func switchEnded(_ number: Int) {
+        switches.withLock { switches in
+            if switches.count == number { switches.isOpen = false }
         }
     }
 

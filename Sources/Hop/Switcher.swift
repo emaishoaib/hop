@@ -6,6 +6,7 @@ enum Switcher {
     private static var windows: [Window] = []
     private static var selected = 0
     private static var outsideClicks: Any?
+    private static var number = 0
 
     /// Whether a switch is showing windows. It closes on ⌥ release, a click on a window,
     /// Esc, or a click outside the panel, whichever comes first.
@@ -14,7 +15,7 @@ enum Switcher {
     /// Carries out what a key press asked of the switch.
     static func perform(_ action: Hotkeys.Action) {
         switch action {
-        case .open(let scope): open(scope)
+        case .open(let scope, let number): open(scope, number: number)
         case .next: next()
         case .move(let direction): move(direction)
         case .cancel: cancel()
@@ -23,12 +24,15 @@ enum Switcher {
     }
 
     /// Lists the windows for `scope`, most recently used first, selects the previous one, and shows the panel.
-    static func open(_ scope: Hotkeys.Scope) {
+    ///
+    /// `number` is the number the keyboard gave this switch. When there are no windows to show, the switch ends at once.
+    static func open(_ scope: Hotkeys.Scope, number: Int) {
+        self.number = number
         if let pid = NSWorkspace.shared.frontmostApplication?.processIdentifier { Recents.recordFocusedWindow(of: pid) }
         windows = Recents.sorted(Window.listed(scope))
         selected = windows.count > 1 ? 1 : 0
         Panel.show(windows, selected: selected)
-        guard isOpen else { return }
+        guard isOpen else { return Hotkeys.switchEnded(number) }
         outsideClicks = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]) { _ in
             MainActor.assumeIsolated { cancel() }
         }
@@ -107,9 +111,11 @@ enum Switcher {
         close()
     }
 
+    /// Hides the panel, forgets the windows, and tells the keyboard that this switch has ended.
     private static func close() {
         Panel.hide()
         windows = []
+        Hotkeys.switchEnded(number)
         if let outsideClicks { NSEvent.removeMonitor(outsideClicks) }
         outsideClicks = nil
     }

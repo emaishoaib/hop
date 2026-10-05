@@ -11,7 +11,8 @@ struct Window {
     /// because they're minimized or their app is hidden.
     ///
     /// Windows on screen under 100 points in either direction are skipped, since those are apps' helper windows,
-    /// not windows you'd switch to. For `.activeApp`, only the frontmost app's windows are kept.
+    /// not windows you'd switch to. So are prompts, such as one asking whether to save changes, when the app
+    /// answers through Accessibility. For `.activeApp`, only the frontmost app's windows are kept.
     @MainActor
     static func listed(_ scope: Hotkeys.Scope) -> [Window] {
         onScreen(scope) + offScreen(scope)
@@ -52,7 +53,7 @@ struct Window {
         let entries = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[CFString: Any]] ?? []
         let ownPID = getpid()
         let frontmostPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
-        return entries.compactMap { entry in
+        let windows: [Window] = entries.compactMap { entry in
             guard entry[kCGWindowLayer] as? Int == 0,
                   (entry[kCGWindowAlpha] as? Double ?? 0) > 0,
                   let bounds = (entry[kCGWindowBounds] as? NSDictionary).flatMap({ CGRect(dictionaryRepresentation: $0 as CFDictionary) }),
@@ -69,6 +70,33 @@ struct Window {
                 title: entry[kCGWindowName] as? String ?? ""
             )
         }
+        let standalone = Dictionary(uniqueKeysWithValues: Set(windows.map(\.pid)).compactMap { pid in
+            ownWindows(of: pid).map { (pid, $0) }
+        })
+        return windows.filter { standalone[$0.pid]?.contains($0.id) ?? true }
+    }
+
+    /// The ids of the windows of the app `pid` that stand on their own, which leaves out its prompts.
+    ///
+    /// A prompt, such as one asking whether to save changes, is either attached to a window or modal,
+    /// meaning the app does nothing else until it's answered. Accessibility reports an attached prompt
+    /// as part of its window rather than as a window, and says which windows are modal.
+    /// This is nil when the app doesn't answer within a quarter of a second or reports no windows at all.
+    @MainActor
+    private static func ownWindows(of pid: pid_t) -> Set<CGWindowID>? {
+        var value: CFTypeRef?
+        let element = AXUIElementCreateApplication(pid)
+        AXUIElementSetMessagingTimeout(element, 0.25)
+        guard AXUIElementCopyAttributeValue(element, kAXWindowsAttribute as CFString, &value) == .success,
+              let windows = value as? [AXUIElement], !windows.isEmpty
+        else { return nil }
+        return Set(windows.compactMap { window in
+            var id: CGWindowID = 0
+            var modal: CFTypeRef?
+            AXUIElementCopyAttributeValue(window, kAXModalAttribute as CFString, &modal)
+            guard _AXUIElementGetWindow(window, &id) == .success, modal as? Bool != true else { return nil }
+            return id
+        })
     }
 
     /// What the switcher shows under this window.

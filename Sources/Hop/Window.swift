@@ -11,34 +11,32 @@ struct Window {
     /// because they're minimized or their app is hidden.
     ///
     /// Windows on screen under 100 points in either direction are skipped, since those are apps' helper windows,
-    /// not windows you'd switch to. So are prompts, such as one asking whether to save changes, when the app
-    /// answers through Accessibility. For `.activeApp`, only the frontmost app's windows are kept.
-    /// Each app is asked about its windows through Accessibility at most once.
+    /// not windows you'd switch to. So are prompts, such as one asking whether to save changes, once the app
+    /// has reported them through Accessibility. For `.activeApp`, only the frontmost app's windows are kept.
+    /// No app is asked anything here. What they report is kept ahead of time by `KnownWindows`.
     @MainActor
     static func listed(_ scope: Hotkeys.Scope) -> [Window] {
         let frontmostPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
         let apps = NSWorkspace.shared.runningApplications
             .filter { $0.activationPolicy == .regular && (scope == .allApps || $0.processIdentifier == frontmostPID) }
-        let onScreen = onScreen(scope)
-        let reported = Dictionary(uniqueKeysWithValues: Set(onScreen.map(\.pid)).union(apps.map(\.processIdentifier)).compactMap { pid in
-            Reported.windows(of: pid).map { (pid, $0) }
-        })
-        let standalone = onScreen.filter { window in
-            reported[window.pid].map { $0.contains { $0.id == window.id && !$0.isModal } } ?? true
+        let standalone = onScreen(scope).filter { window in
+            KnownWindows.of(window.pid)?.contains { $0.id == window.id && $0.isModal } != true
         }
-        return standalone + offScreen(apps, reported: reported)
+        return standalone + offScreen(apps, besides: Set(standalone.map(\.id)))
     }
 
     /// The minimized windows of `apps`, and every window of a hidden app. These are off screen until they're switched to.
     ///
-    /// They're taken from what the apps report through Accessibility, because the window list also reports apps'
-    /// off-screen helper windows and gives no way to tell them apart. An app that didn't answer is skipped,
-    /// so a frozen app can't hold the switch up.
+    /// They're taken from what the apps last reported through Accessibility, because the window list also reports apps'
+    /// off-screen helper windows and gives no way to tell them apart. A window that has closed since, or that's
+    /// among `onScreen` because it came back before its app reported it, is left out.
     @MainActor
-    private static func offScreen(_ apps: [NSRunningApplication], reported: [pid_t: [Reported]]) -> [Window] {
-        apps.flatMap { app in
-            (reported[app.processIdentifier] ?? [])
-                .filter { app.isHidden || $0.isMinimized }
+    private static func offScreen(_ apps: [NSRunningApplication], besides onScreen: Set<CGWindowID>) -> [Window] {
+        let entries = CGWindowListCopyWindowInfo(.optionAll, kCGNullWindowID) as? [[CFString: Any]] ?? []
+        let open = Set(entries.compactMap { $0[kCGWindowNumber] as? CGWindowID })
+        return apps.flatMap { app in
+            (KnownWindows.of(app.processIdentifier) ?? [])
+                .filter { (app.isHidden || $0.isMinimized) && open.contains($0.id) && !onScreen.contains($0.id) }
                 .map { Window(id: $0.id, pid: app.processIdentifier, appName: app.localizedName ?? "", title: $0.title) }
         }
     }
@@ -64,40 +62,6 @@ struct Window {
                 appName: entry[kCGWindowOwnerName] as? String ?? "",
                 title: entry[kCGWindowName] as? String ?? ""
             )
-        }
-    }
-
-    /// One of an app's windows, as the app reports it through Accessibility.
-    ///
-    /// A prompt, such as one asking whether to save changes, is either attached to a window or modal,
-    /// meaning the app does nothing else until it's answered. Accessibility reports an attached prompt
-    /// as part of its window rather than as a window, and says which windows are modal.
-    private struct Reported {
-        let id: CGWindowID
-        let isModal: Bool
-        let isMinimized: Bool
-        let title: String
-
-        /// The windows the app `pid` reports, with each window's details read in a single request.
-        ///
-        /// This is nil when the app doesn't answer within a quarter of a second or reports no windows at all.
-        static func windows(of pid: pid_t) -> [Reported]? {
-            var value: CFTypeRef?
-            let element = AXUIElementCreateApplication(pid)
-            AXUIElementSetMessagingTimeout(element, 0.25)
-            guard AXUIElementCopyAttributeValue(element, kAXWindowsAttribute as CFString, &value) == .success,
-                  let windows = value as? [AXUIElement], !windows.isEmpty
-            else { return nil }
-            let attributes = [kAXModalAttribute, kAXMinimizedAttribute, kAXTitleAttribute]
-            return windows.compactMap { window in
-                var id: CGWindowID = 0
-                var values: CFArray?
-                guard _AXUIElementGetWindow(window, &id) == .success else { return nil }
-                AXUIElementCopyMultipleAttributeValues(window, attributes as CFArray, [], &values)
-                let answers = values as? [Any] ?? []
-                guard answers.count == attributes.count else { return Reported(id: id, isModal: false, isMinimized: false, title: "") }
-                return Reported(id: id, isModal: answers[0] as? Bool == true, isMinimized: answers[1] as? Bool == true, title: answers[2] as? String ?? "")
-            }
         }
     }
 

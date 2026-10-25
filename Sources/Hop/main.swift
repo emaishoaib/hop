@@ -7,6 +7,7 @@ CGRequestScreenCaptureAccess()
 Accessibility.whenTrusted {
     Hotkeys.start()
     Recents.start()
+    KnownWindows.start()
     Watcher.start()
 }
 app.run()

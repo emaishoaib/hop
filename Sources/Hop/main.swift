@@ -7,5 +7,6 @@ CGRequestScreenCaptureAccess()
 Accessibility.whenTrusted {
     Hotkeys.start()
     Recents.start()
+    Watcher.start()
 }
 app.run()

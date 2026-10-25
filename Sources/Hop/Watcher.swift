@@ -8,6 +8,7 @@ enum Watcher {
     private static var observers: [pid_t: AXObserver] = [:]
     private static var retrying: Set<pid_t> = []
     private static var handlers: [String: [@MainActor (pid_t, CGWindowID?) -> Void]] = [:]
+    private static let queue = DispatchQueue(label: "Hop watcher", qos: .userInitiated)
 
     /// Calls `handle` each time any app sends `notification`, with the app and, when the notification
     /// came from a window, that window's id.
@@ -43,19 +44,34 @@ enum Watcher {
     }
 
     /// Tries to follow the app `pid`, and schedules another try while it fails and `attemptsLeft` is above zero.
+    ///
+    /// The app is asked off the main thread, so one that doesn't answer can't hold a switch up.
     private static func retry(_ pid: pid_t, attemptsLeft: Int) {
-        guard !subscribe(pid), attemptsLeft > 0 else {
-            retrying.remove(pid)
-            return
-        }
         retrying.insert(pid)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            MainActor.assumeIsolated { retry(pid, attemptsLeft: attemptsLeft - 1) }
+        let notifications = Array(handlers.keys)
+        queue.async {
+            let observer = subscribe(pid, to: notifications)
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    if let observer {
+                        observers[pid] = observer
+                    }
+                    guard observer == nil, attemptsLeft > 0 else {
+                        retrying.remove(pid)
+                        return
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        MainActor.assumeIsolated { retry(pid, attemptsLeft: attemptsLeft - 1) }
+                    }
+                }
+            }
         }
     }
 
-    /// Subscribes to every notification asked for in the app `pid`, and returns whether any of them worked.
-    private static func subscribe(_ pid: pid_t) -> Bool {
+    /// Subscribes to `notifications` in the app `pid`, and returns the observer when any of them worked.
+    ///
+    /// Notifications are delivered on the main thread. An app that doesn't answer within a quarter of a second counts as not ready.
+    private nonisolated static func subscribe(_ pid: pid_t, to notifications: [String]) -> AXObserver? {
         var observer: AXObserver?
         AXObserverCreate(pid, { _, element, notification, _ in
             var pid: pid_t = 0
@@ -67,12 +83,12 @@ enum Watcher {
             MainActor.assumeIsolated { Watcher.deliver(name, app: app, window: window) }
         }, &observer)
         let element = AXUIElementCreateApplication(pid)
+        AXUIElementSetMessagingTimeout(element, 0.25)
         guard let observer,
-              handlers.keys.map({ AXObserverAddNotification(observer, element, $0 as CFString, nil) }).contains(.success)
-        else { return false }
+              notifications.map({ AXObserverAddNotification(observer, element, $0 as CFString, nil) }).contains(.success)
+        else { return nil }
         CFRunLoopAddSource(CFRunLoopGetMain(), AXObserverGetRunLoopSource(observer), .commonModes)
-        observers[pid] = observer
-        return true
+        return observer
     }
 
     private static func unwatch(_ pid: pid_t) {

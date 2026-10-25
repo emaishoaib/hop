@@ -13,39 +13,34 @@ struct Window {
     /// Windows on screen under 100 points in either direction are skipped, since those are apps' helper windows,
     /// not windows you'd switch to. So are prompts, such as one asking whether to save changes, when the app
     /// answers through Accessibility. For `.activeApp`, only the frontmost app's windows are kept.
+    /// Each app is asked about its windows through Accessibility at most once.
     @MainActor
     static func listed(_ scope: Hotkeys.Scope) -> [Window] {
-        onScreen(scope) + offScreen(scope)
+        let frontmostPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
+        let apps = NSWorkspace.shared.runningApplications
+            .filter { $0.activationPolicy == .regular && (scope == .allApps || $0.processIdentifier == frontmostPID) }
+        let onScreen = onScreen(scope)
+        let reported = Dictionary(uniqueKeysWithValues: Set(onScreen.map(\.pid)).union(apps.map(\.processIdentifier)).compactMap { pid in
+            Reported.windows(of: pid).map { (pid, $0) }
+        })
+        let standalone = onScreen.filter { window in
+            reported[window.pid].map { $0.contains { $0.id == window.id && !$0.isModal } } ?? true
+        }
+        return standalone + offScreen(apps, reported: reported)
     }
 
-    /// The minimized windows, and every window of a hidden app. These are off screen until they're switched to.
+    /// The minimized windows of `apps`, and every window of a hidden app. These are off screen until they're switched to.
     ///
-    /// They're read through Accessibility, because the window list also reports apps' off-screen helper windows
-    /// and gives no way to tell them apart. An app that doesn't answer within a quarter of a second is skipped,
+    /// They're taken from what the apps report through Accessibility, because the window list also reports apps'
+    /// off-screen helper windows and gives no way to tell them apart. An app that didn't answer is skipped,
     /// so a frozen app can't hold the switch up.
     @MainActor
-    private static func offScreen(_ scope: Hotkeys.Scope) -> [Window] {
-        let frontmostPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
-        return NSWorkspace.shared.runningApplications
-            .filter { $0.activationPolicy == .regular && (scope == .allApps || $0.processIdentifier == frontmostPID) }
-            .flatMap { app in
-                var value: CFTypeRef?
-                let pid = app.processIdentifier
-                let element = AXUIElementCreateApplication(pid)
-                AXUIElementSetMessagingTimeout(element, 0.25)
-                guard AXUIElementCopyAttributeValue(element, kAXWindowsAttribute as CFString, &value) == .success,
-                      let windows = value as? [AXUIElement]
-                else { return [Window]() }
-                return windows.compactMap { window in
-                    var id: CGWindowID = 0
-                    var minimized: CFTypeRef?
-                    var title: CFTypeRef?
-                    AXUIElementCopyAttributeValue(window, kAXMinimizedAttribute as CFString, &minimized)
-                    AXUIElementCopyAttributeValue(window, kAXTitleAttribute as CFString, &title)
-                    guard _AXUIElementGetWindow(window, &id) == .success, app.isHidden || minimized as? Bool == true else { return nil }
-                    return Window(id: id, pid: pid, appName: app.localizedName ?? "", title: title as? String ?? "")
-                }
-            }
+    private static func offScreen(_ apps: [NSRunningApplication], reported: [pid_t: [Reported]]) -> [Window] {
+        apps.flatMap { app in
+            (reported[app.processIdentifier] ?? [])
+                .filter { app.isHidden || $0.isMinimized }
+                .map { Window(id: $0.id, pid: app.processIdentifier, appName: app.localizedName ?? "", title: $0.title) }
+        }
     }
 
     @MainActor
@@ -53,7 +48,7 @@ struct Window {
         let entries = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[CFString: Any]] ?? []
         let ownPID = getpid()
         let frontmostPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
-        let windows: [Window] = entries.compactMap { entry in
+        return entries.compactMap { entry in
             guard entry[kCGWindowLayer] as? Int == 0,
                   (entry[kCGWindowAlpha] as? Double ?? 0) > 0,
                   let bounds = (entry[kCGWindowBounds] as? NSDictionary).flatMap({ CGRect(dictionaryRepresentation: $0 as CFDictionary) }),
@@ -70,33 +65,40 @@ struct Window {
                 title: entry[kCGWindowName] as? String ?? ""
             )
         }
-        let standalone = Dictionary(uniqueKeysWithValues: Set(windows.map(\.pid)).compactMap { pid in
-            ownWindows(of: pid).map { (pid, $0) }
-        })
-        return windows.filter { standalone[$0.pid]?.contains($0.id) ?? true }
     }
 
-    /// The ids of the windows of the app `pid` that stand on their own, which leaves out its prompts.
+    /// One of an app's windows, as the app reports it through Accessibility.
     ///
     /// A prompt, such as one asking whether to save changes, is either attached to a window or modal,
     /// meaning the app does nothing else until it's answered. Accessibility reports an attached prompt
     /// as part of its window rather than as a window, and says which windows are modal.
-    /// This is nil when the app doesn't answer within a quarter of a second or reports no windows at all.
-    @MainActor
-    private static func ownWindows(of pid: pid_t) -> Set<CGWindowID>? {
-        var value: CFTypeRef?
-        let element = AXUIElementCreateApplication(pid)
-        AXUIElementSetMessagingTimeout(element, 0.25)
-        guard AXUIElementCopyAttributeValue(element, kAXWindowsAttribute as CFString, &value) == .success,
-              let windows = value as? [AXUIElement], !windows.isEmpty
-        else { return nil }
-        return Set(windows.compactMap { window in
-            var id: CGWindowID = 0
-            var modal: CFTypeRef?
-            AXUIElementCopyAttributeValue(window, kAXModalAttribute as CFString, &modal)
-            guard _AXUIElementGetWindow(window, &id) == .success, modal as? Bool != true else { return nil }
-            return id
-        })
+    private struct Reported {
+        let id: CGWindowID
+        let isModal: Bool
+        let isMinimized: Bool
+        let title: String
+
+        /// The windows the app `pid` reports, with each window's details read in a single request.
+        ///
+        /// This is nil when the app doesn't answer within a quarter of a second or reports no windows at all.
+        static func windows(of pid: pid_t) -> [Reported]? {
+            var value: CFTypeRef?
+            let element = AXUIElementCreateApplication(pid)
+            AXUIElementSetMessagingTimeout(element, 0.25)
+            guard AXUIElementCopyAttributeValue(element, kAXWindowsAttribute as CFString, &value) == .success,
+                  let windows = value as? [AXUIElement], !windows.isEmpty
+            else { return nil }
+            let attributes = [kAXModalAttribute, kAXMinimizedAttribute, kAXTitleAttribute]
+            return windows.compactMap { window in
+                var id: CGWindowID = 0
+                var values: CFArray?
+                guard _AXUIElementGetWindow(window, &id) == .success else { return nil }
+                AXUIElementCopyMultipleAttributeValues(window, attributes as CFArray, [], &values)
+                let answers = values as? [Any] ?? []
+                guard answers.count == attributes.count else { return Reported(id: id, isModal: false, isMinimized: false, title: "") }
+                return Reported(id: id, isModal: answers[0] as? Bool == true, isMinimized: answers[1] as? Bool == true, title: answers[2] as? String ?? "")
+            }
+        }
     }
 
     /// What the switcher shows under this window.

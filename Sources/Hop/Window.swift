@@ -106,7 +106,9 @@ struct Window {
 
     /// Brings this window to the front and makes its app the active one, leaving the app's other windows where they are.
     ///
-    /// The window is made its app's main window first, because activating an app brings only its main window forward.
+    /// The window is made its app's main window and raised first, because activating the app brings only its front window forward.
+    /// That activation uses a deprecated Carbon function, because `NSRunningApplication.activate` can bring all of an app's
+    /// windows forward whatever its options say. `activate` is only the fallback for when the Carbon function fails.
     /// When the window can't be found through Accessibility, the app is still activated.
     /// A hidden app is shown again first, which brings back all of its windows, and a minimized window is taken out of the Dock.
     func focus() {
@@ -117,7 +119,13 @@ struct Window {
             AXUIElementSetAttributeValue(window, kAXMainAttribute as CFString, kCFBooleanTrue)
             AXUIElementPerformAction(window, kAXRaiseAction as CFString)
         }
-        app?.activate(options: [])
+        var process = ProcessSerialNumber()
+        guard GetProcessForPID(pid, &process) == noErr,
+              SetFrontProcessWithOptions(&process, OptionBits(kSetFrontProcessFrontWindowOnly)) == noErr
+        else {
+            app?.activate(options: [])
+            return
+        }
     }
 
     /// Asks this window to close, the same as clicking its close button, so the app can still ask to save first.
@@ -166,3 +174,15 @@ struct Window {
 /// to the window id the window list reports. It has been stable for over a decade.
 @_silgen_name("_AXUIElementGetWindow")
 func _AXUIElementGetWindow(_ element: AXUIElement, _ id: UnsafeMutablePointer<CGWindowID>) -> AXError
+
+/// Finds the Carbon process number of the app `pid`, which `SetFrontProcessWithOptions` takes.
+///
+/// This is declared here because Swift hides functions deprecated as of macOS 10.9.
+@_silgen_name("GetProcessForPID")
+func GetProcessForPID(_ pid: pid_t, _ process: UnsafeMutablePointer<ProcessSerialNumber>) -> OSStatus
+
+/// Makes `process` the active app, with `options` saying which of its windows come forward.
+///
+/// This is declared here because Swift hides functions deprecated as of macOS 10.9.
+@_silgen_name("SetFrontProcessWithOptions")
+func SetFrontProcessWithOptions(_ process: UnsafePointer<ProcessSerialNumber>, _ options: OptionBits) -> OSStatus

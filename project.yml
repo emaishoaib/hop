@@ -6,12 +6,15 @@ options:
     macOS: "14.0"
   createIntermediateGroups: true
 
+configFiles:
+  Release: Config/Release.xcconfig
+
 settings:
   base:
     SWIFT_VERSION: "6.0"
     MARKETING_VERSION: "0.1.0"
     CURRENT_PROJECT_VERSION: "1"
-    CODE_SIGN_STYLE: Automatic
+    CODE_SIGN_STYLE: Manual
 
 targets:
   Hop-macOS:
@@ -32,3 +35,7 @@ targets:
         PRODUCT_NAME: Hop
         PRODUCT_BUNDLE_IDENTIFIER: com.mashoaib.hop
         CODE_SIGN_IDENTITY: "-"
+        ENABLE_HARDENED_RUNTIME: YES
+      configs:
+        Release:
+          CODE_SIGN_IDENTITY: Developer ID Application

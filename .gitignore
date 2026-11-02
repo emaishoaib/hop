@@ -2,3 +2,4 @@
 Hop.app/
 build/
 Hop.xcodeproj/
+Config/Release.xcconfig

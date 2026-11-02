@@ -28,7 +28,9 @@ Each window is labelled with its app's icon and its title. A VS Code window is l
 
 ## Build and open
 
-Needs macOS 14 or later, Xcode and `xcodegen` (`brew install xcodegen`).
+Needs macOS 14 or later, Xcode, `xcodegen` (`brew install xcodegen`) and a Developer ID Application certificate.
+
+Release builds are signed with that certificate, so Accessibility and Screen Recording stay granted from one build to the next. They read the Apple development team from `Config/Release.xcconfig`, which is not committed. Copy `Config/Release.xcconfig.example` and fill it in.
 
 The Xcode project is generated from `project.yml` and is not committed. Generate it first, and again whenever a file is added or removed:
 

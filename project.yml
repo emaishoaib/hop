@@ -16,6 +16,11 @@ settings:
     CURRENT_PROJECT_VERSION: "1"
     CODE_SIGN_STYLE: Manual
 
+packages:
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    from: 2.10.1
+
 targets:
   Hop-macOS:
     type: application
@@ -23,6 +28,8 @@ targets:
     sources:
       - macOS
       - AppIcon.icns
+    dependencies:
+      - package: Sparkle
     info:
       path: macOS/Info.plist
       properties:
@@ -30,6 +37,9 @@ targets:
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         CFBundleIconFile: AppIcon
         LSUIElement: true
+        SUFeedURL: https://$(HOP_UPDATES_HOST)/hop/appcast.xml
+        SUPublicEDKey: $(HOP_SPARKLE_PUBLIC_KEY)
+        SUEnableAutomaticChecks: true
     settings:
       base:
         PRODUCT_NAME: Hop

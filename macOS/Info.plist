@@ -22,5 +22,11 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSUIElement</key>
 	<true/>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUFeedURL</key>
+	<string>https://$(HOP_UPDATES_HOST)/hop/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>$(HOP_SPARKLE_PUBLIC_KEY)</string>
 </dict>
 </plist>

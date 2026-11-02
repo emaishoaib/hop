@@ -1,11 +1,9 @@
 import AppKit
 
-/// One window in the panel: a thumbnail with the app's icon and the window's title underneath.
-///
-/// The thumbnail starts as the app's icon and is replaced once the capture arrives.
-/// Clicking the tile calls `onClick`, even though the panel's app is never the active one.
-/// The two buttons in the thumbnail's top-right corner call `onQuit` and `onClose` instead.
 final class Tile: NSView {
+    private static let thumbnailAspectRatio: CGFloat = 0.625
+    private static let fadeDuration = 0.15
+
     let windowID: CGWindowID
     let thumbnailWidth: CGFloat
     let thumbnail = NSImageView()
@@ -56,19 +54,18 @@ final class Tile: NSView {
             column.bottomAnchor.constraint(equalTo: bottomAnchor),
             widthAnchor.constraint(equalToConstant: width + column.edgeInsets.left + column.edgeInsets.right),
             thumbnail.widthAnchor.constraint(equalToConstant: width),
-            thumbnail.heightAnchor.constraint(equalToConstant: width * 0.625),
+            thumbnail.heightAnchor.constraint(equalToConstant: width * Self.thumbnailAspectRatio),
             icon.widthAnchor.constraint(equalToConstant: 16),
             icon.heightAnchor.constraint(equalToConstant: 16),
             label.widthAnchor.constraint(lessThanOrEqualToConstant: width),
         ])
     }
 
-    /// Swaps in a freshly captured thumbnail, fading from the old one unless Reduce Motion is on.
     func fadeIn(_ image: NSImage) {
-        if !Panel.reduceMotion, let layer = thumbnail.layer {
+        if !PanelAnimation.isReduced, let layer = thumbnail.layer {
             let fade = CATransition()
             fade.type = .fade
-            fade.duration = 0.15
+            fade.duration = Self.fadeDuration
             layer.add(fade, forKey: "fade")
         }
         thumbnail.image = image
@@ -89,22 +86,4 @@ final class Tile: NSView {
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
-}
-
-/// A round button for a thumbnail's top-right corner: a white symbol on a dark circle, so it shows up on any thumbnail.
-///
-/// Like the tile, it works on the first click even though the panel's app is never the active one.
-private final class CornerButton: NSButton {
-    convenience init(_ symbol: String, _ description: String, target: AnyObject, action: Selector) {
-        self.init(frame: .zero)
-        let colors = NSImage.SymbolConfiguration(paletteColors: [.white, NSColor.black.withAlphaComponent(0.6)])
-        image = NSImage(systemSymbolName: symbol, accessibilityDescription: description)?
-            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 18, weight: .regular).applying(colors))
-        isBordered = false
-        toolTip = description
-        self.target = target
-        self.action = action
-    }
-
-    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 }

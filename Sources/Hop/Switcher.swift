@@ -1,132 +1,110 @@
 import AppKit
 
-/// One switch, from the first press until it closes: the windows it cycles through and which one is selected.
 @MainActor
-enum Switcher {
-    private static var windows: [Window] = []
-    private static var selected = 0
-    private static var outsideClicks: Any?
-    private static var number = 0
+final class Switcher {
+    static let shared = Switcher()
 
-    /// Whether a switch is showing windows. It closes on ⌥ release, a click on a window,
-    /// Esc, or a click outside the panel, whichever comes first.
-    static var isOpen: Bool { !windows.isEmpty }
+    private static let closeChecks = 40
+    private static let closeCheckInterval = Duration.milliseconds(50)
 
-    /// Carries out what a key press asked of the switch.
-    static func perform(_ action: Hotkeys.Action) {
+    private struct OpenSwitch {
+        let number: Int
+        var windows: [Window]
+        var selected: Int
+        var outsideClicks: Any?
+    }
+
+    private var current: OpenSwitch?
+
+    func perform(_ action: SwitchAction) {
         switch action {
         case .open(let scope, let number): open(scope, number: number)
-        case .next: next()
+        case .next: move(.right)
         case .move(let direction): move(direction)
-        case .cancel: cancel()
+        case .cancel: close()
         case .release: release()
         }
     }
 
-    /// Lists the windows for `scope`, most recently used first, selects the previous one, and shows the panel.
-    ///
-    /// `number` is the number the keyboard gave this switch. When there are no windows to show, the switch ends at once.
-    static func open(_ scope: Hotkeys.Scope, number: Int) {
-        self.number = number
-        if let pid = NSWorkspace.shared.frontmostApplication?.processIdentifier { Recents.recordFocusedWindow(of: pid) }
-        windows = Recents.sorted(Window.listed(scope))
-        selected = windows.count > 1 ? 1 : 0
-        Panel.show(windows, selected: selected)
-        guard isOpen else { return Hotkeys.switchEnded(number) }
-        outsideClicks = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]) { _ in
-            MainActor.assumeIsolated { cancel() }
-        }
-    }
-
-    /// Moves the selection to the next window, wrapping around at the end.
-    static func next() {
-        move(.right)
-    }
-
-    enum Direction { case left, right, up, down }
-
-    /// Moves the selection one tile left or right, wrapping around, or one row up or down, stopping at the edges.
-    ///
-    /// Moving down into a shorter last row lands on its last tile when there's none directly below.
-    static func move(_ direction: Direction) {
-        guard !windows.isEmpty else { return }
-        switch direction {
-        case .left: selected = (selected - 1 + windows.count) % windows.count
-        case .right: selected = (selected + 1) % windows.count
-        case .up where selected - Panel.columns >= 0: selected -= Panel.columns
-        case .down where selected / Panel.columns < (windows.count - 1) / Panel.columns:
-            selected = min(selected + Panel.columns, windows.count - 1)
-        default: return
-        }
-        Panel.select(selected)
-    }
-
-    /// Asks the window at `index` to close and takes it out of the switch once it has, which stays open unless no windows are left.
-    ///
-    /// The window is checked every 50 milliseconds for two seconds, or until this switch ends.
-    /// When it's still there after that, such as when its app is asking whether to save changes, it stays in the switch.
-    static func closeWindow(_ index: Int) {
-        guard windows.indices.contains(index) else { return }
-        let window = windows[index]
-        let number = number
+    func closeWindow(at index: Int) {
+        guard let current, current.windows.indices.contains(index) else { return }
+        let window = current.windows[index]
+        let number = current.number
         window.close()
         Task {
-            for _ in 0..<40 {
-                guard isOpen, self.number == number else { return }
+            for _ in 0..<Self.closeChecks {
+                guard self.current?.number == number else { return }
                 if window.isClosed { return remove { $0.id == window.id } }
-                try? await Task.sleep(for: .milliseconds(50))
+                try? await Task.sleep(for: Self.closeCheckInterval)
             }
         }
     }
 
-    /// Quits the app that owns the window at `index`, the same as ⌘Q, and takes all its windows out of the switch.
-    static func quitApp(_ index: Int) {
-        guard windows.indices.contains(index) else { return }
-        let pid = windows[index].pid
+    func quitApp(at index: Int) {
+        guard let current, current.windows.indices.contains(index) else { return }
+        let pid = current.windows[index].pid
         NSRunningApplication(processIdentifier: pid)?.terminate()
         remove { $0.pid == pid }
     }
 
-    /// Takes the windows matching `isGone` out of the switch and shows the rest, keeping the same window selected when it's still there.
-    ///
-    /// When no windows are left, the switch ends.
-    private static func remove(where isGone: (Window) -> Bool) {
-        let selectedID = windows[selected].id
-        windows.removeAll(where: isGone)
-        guard isOpen else { return cancel() }
-        selected = windows.firstIndex { $0.id == selectedID } ?? min(selected, windows.count - 1)
-        Panel.show(windows, selected: selected)
-    }
-
-    /// Ends the switch on the window at `index`, without waiting for ⌥ to be released.
-    static func pick(_ index: Int) {
-        selected = index
+    func pick(at index: Int) {
+        current?.selected = index
         release()
     }
 
-    /// Ends the switch: hides the panel and focuses the selected window.
-    static func release() {
-        let target = windows.indices.contains(selected) ? windows[selected] : nil
-        close()
-        if let target {
-            Recents.record(target.id)
-            target.focus()
+    private func open(_ scope: SwitchScope, number: Int) {
+        if let pid = NSWorkspace.shared.frontmostPID { Recents.shared.recordFocusedWindow(of: pid) }
+        let windows = Recents.shared.sorted(Window.listed(scope))
+        guard !windows.isEmpty else { return Hotkeys.shared.switchEnded(number) }
+        let selected = windows.count > 1 ? 1 : 0
+        current = OpenSwitch(number: number, windows: windows, selected: selected)
+        Panel.shared.show(windows, selected: selected)
+        current?.outsideClicks = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]) { [weak self] _ in
+            MainActor.assumeIsolated { self?.close() }
         }
     }
 
-    /// Abandons the switch without focusing anything, leaving you where you were.
-    ///
-    /// A click outside the panel still reaches whatever it lands on.
-    static func cancel() {
-        close()
+    private func move(_ direction: SwitchDirection) {
+        guard let current else { return }
+        let count = current.windows.count
+        let columns = Panel.shared.columns
+        let selected = current.selected
+        let moved: Int? = switch direction {
+        case .left: (selected - 1 + count) % count
+        case .right: (selected + 1) % count
+        case .up where selected - columns >= 0: selected - columns
+        case .down where selected / columns < (count - 1) / columns: min(selected + columns, count - 1)
+        default: nil
+        }
+        guard let moved else { return }
+        self.current?.selected = moved
+        Panel.shared.select(moved)
     }
 
-    /// Hides the panel, forgets the windows, and tells the keyboard that this switch has ended.
-    private static func close() {
-        Panel.hide()
-        windows = []
-        Hotkeys.switchEnded(number)
-        if let outsideClicks { NSEvent.removeMonitor(outsideClicks) }
-        outsideClicks = nil
+    private func remove(where isGone: (Window) -> Bool) {
+        guard var updated = current else { return }
+        let selectedID = updated.windows[updated.selected].id
+        updated.windows.removeAll(where: isGone)
+        guard !updated.windows.isEmpty else { return close() }
+        updated.selected = updated.windows.firstIndex { $0.id == selectedID } ?? min(updated.selected, updated.windows.count - 1)
+        current = updated
+        Panel.shared.show(updated.windows, selected: updated.selected)
+    }
+
+    private func release() {
+        guard let current else { return }
+        let target = current.windows.indices.contains(current.selected) ? current.windows[current.selected] : nil
+        close()
+        guard let target else { return }
+        Recents.shared.record(target.id)
+        target.focus()
+    }
+
+    private func close() {
+        guard let current else { return }
+        Panel.shared.hide()
+        Hotkeys.shared.switchEnded(current.number)
+        if let outsideClicks = current.outsideClicks { NSEvent.removeMonitor(outsideClicks) }
+        self.current = nil
     }
 }

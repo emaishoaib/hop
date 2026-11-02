@@ -1,68 +1,55 @@
 import AppKit
 
-/// The windows you've focused, most recent first, so a switch can list them in the order you used them.
-///
-/// It follows each app's focused window through Accessibility notifications, so it sees a focus change
-/// however it happened: ⌘Tab, a click, the Dock, or the switcher itself.
 @MainActor
-enum Recents {
-    private static var order: [CGWindowID] = []
+final class Recents {
+    static let shared = Recents()
 
-    /// Starts following focus in every app the watcher follows, and records each app's focused window as it becomes active.
-    ///
-    /// Asks the watcher for focus changes, so it must be called before the watcher starts.
-    static func start() {
-        Watcher.on(kAXFocusedWindowChangedNotification) { _, window in
+    private static let remembered = 100
+    private static let focusRetries = 20
+    private static let focusRetryInterval = Duration.milliseconds(100)
+
+    private var order: [CGWindowID] = []
+
+    func start() {
+        Watcher.shared.on(kAXFocusedWindowChangedNotification) { [self] _, window in
             if let window { record(window) }
         }
-        _ = NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main) { note in
-            guard let pid = (note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication)?.processIdentifier else { return }
-            MainActor.assumeIsolated { recordFocusedWindow(of: pid, attemptsLeft: 20) }
+        NSWorkspace.shared.onAppChange(NSWorkspace.didActivateApplicationNotification) { [self] in
+            recordFocusedWindowOfNewlyActiveApp($0)
         }
-        if let pid = NSWorkspace.shared.frontmostApplication?.processIdentifier { recordFocusedWindow(of: pid) }
+        if let pid = NSWorkspace.shared.frontmostPID { recordFocusedWindow(of: pid) }
     }
 
-    /// Moves the window `id` to the front of the order, keeping the 100 most recent.
-    static func record(_ id: CGWindowID) {
+    func record(_ id: CGWindowID) {
         order.removeAll { $0 == id }
         order.insert(id, at: 0)
-        if order.count > 100 { order.removeLast() }
+        if order.count > Self.remembered { order.removeLast() }
     }
 
-    /// `windows` with the ones you've used first, most recent first, and the rest after them in their original order.
-    static func sorted(_ windows: [Window]) -> [Window] {
+    func sorted(_ windows: [Window]) -> [Window] {
         let rank = Dictionary(uniqueKeysWithValues: order.enumerated().map { ($1, $0) })
         return windows.enumerated()
             .sorted { (rank[$0.element.id] ?? Int.max, $0.offset) < (rank[$1.element.id] ?? Int.max, $1.offset) }
             .map(\.element)
     }
 
-    /// Records the window that has focus in the app `pid`, which is how a switch to a whole app gets noticed,
-    /// and returns whether the app said which window that is.
-    ///
-    /// The switcher also calls it as it opens, to catch a window that appeared while its app was still launching.
     @discardableResult
-    static func recordFocusedWindow(of pid: pid_t) -> Bool {
+    func recordFocusedWindow(of pid: pid_t) -> Bool {
         var value: CFTypeRef?
         guard AXUIElementCopyAttributeValue(AXUIElementCreateApplication(pid), kAXFocusedWindowAttribute as CFString, &value) == .success,
-              let value, CFGetTypeID(value) == AXUIElementGetTypeID()
+              let value, CFGetTypeID(value) == AXUIElementGetTypeID(),
+              let id = (value as! AXUIElement).windowID
         else { return false }
-        var id: CGWindowID = 0
-        guard _AXUIElementGetWindow(value as! AXUIElement, &id) == .success else { return false }
         record(id)
         return true
     }
 
-    /// Records the focused window of the app `pid`, which has just become active, trying again while the app doesn't answer.
-    ///
-    /// An app can be too busy to answer at the moment it becomes active. It's asked again every tenth of a second
-    /// while `attemptsLeft` is above zero, and no longer once another app is the active one.
-    private static func recordFocusedWindow(of pid: pid_t, attemptsLeft: Int) {
-        guard !recordFocusedWindow(of: pid), attemptsLeft > 0 else { return }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            MainActor.assumeIsolated {
-                guard NSWorkspace.shared.frontmostApplication?.processIdentifier == pid else { return }
-                recordFocusedWindow(of: pid, attemptsLeft: attemptsLeft - 1)
+    private func recordFocusedWindowOfNewlyActiveApp(_ pid: pid_t) {
+        guard !recordFocusedWindow(of: pid) else { return }
+        Task {
+            for _ in 0..<Self.focusRetries {
+                try? await Task.sleep(for: Self.focusRetryInterval)
+                guard NSWorkspace.shared.frontmostPID == pid, !recordFocusedWindow(of: pid) else { return }
             }
         }
     }

@@ -1,103 +1,71 @@
 import AppKit
 
-/// Follows what happens in every app through Accessibility notifications, and passes each one on to whoever asked for it.
-///
-/// Each app gets one observer, subscribed to every notification asked for with `on`.
 @MainActor
-enum Watcher {
-    private static var observers: [pid_t: AXObserver] = [:]
-    private static var retrying: Set<pid_t> = []
-    private static var handlers: [String: [@MainActor (pid_t, CGWindowID?) -> Void]] = [:]
-    private static let queue = DispatchQueue(label: "Hop watcher", qos: .userInitiated)
+final class Watcher {
+    static let shared = Watcher()
 
-    /// Calls `handle` each time any app sends `notification`, with the app and, when the notification
-    /// came from a window, that window's id.
-    ///
-    /// Only notifications asked for before `start` are followed.
-    static func on(_ notification: String, _ handle: @escaping @MainActor (pid_t, CGWindowID?) -> Void) {
+    private static let retries = 20
+    private static let retryInterval = Duration.milliseconds(100)
+
+    private let subscriber = Subscriber()
+    private var observers: [pid_t: AXObserver] = [:]
+    private var retrying: Set<pid_t> = []
+    private var handlers: [String: [@MainActor (pid_t, CGWindowID?) -> Void]] = [:]
+
+    func on(_ notification: String, _ handle: @escaping @MainActor (pid_t, CGWindowID?) -> Void) {
         handlers[notification, default: []].append(handle)
     }
 
-    /// Starts following every running app, and each app as it becomes active.
-    static func start() {
-        for app in NSWorkspace.shared.runningApplications where app.activationPolicy != .prohibited {
+    func start() {
+        for app in NSWorkspace.shared.watchableApps {
             watch(app.processIdentifier)
         }
-        let center = NSWorkspace.shared.notificationCenter
-        _ = center.addObserver(forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main) { note in
-            guard let pid = (note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication)?.processIdentifier else { return }
-            MainActor.assumeIsolated { watch(pid) }
-        }
-        _ = center.addObserver(forName: NSWorkspace.didTerminateApplicationNotification, object: nil, queue: .main) { note in
-            guard let pid = (note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication)?.processIdentifier else { return }
-            MainActor.assumeIsolated { unwatch(pid) }
-        }
+        NSWorkspace.shared.onAppChange(NSWorkspace.didActivateApplicationNotification) { [self] in watch($0) }
+        NSWorkspace.shared.onAppChange(NSWorkspace.didTerminateApplicationNotification) { [self] in unwatch($0) }
     }
 
-    /// Starts following the app `pid`, unless it's already followed or being retried.
-    ///
-    /// An app that has only just launched may not be ready yet. It's tried again every tenth of a second
-    /// for two seconds, and after that the next time it becomes active.
-    private static func watch(_ pid: pid_t) {
+    fileprivate func deliver(_ notification: String, app: pid_t, window: CGWindowID?) {
+        for handle in handlers[notification] ?? [] { handle(app, window) }
+    }
+
+    private func watch(_ pid: pid_t) {
         guard pid != getpid(), observers[pid] == nil, !retrying.contains(pid) else { return }
-        retry(pid, attemptsLeft: 20)
-    }
-
-    /// Tries to follow the app `pid`, and schedules another try while it fails and `attemptsLeft` is above zero.
-    ///
-    /// The app is asked off the main thread, so one that doesn't answer can't hold a switch up.
-    private static func retry(_ pid: pid_t, attemptsLeft: Int) {
         retrying.insert(pid)
         let notifications = Array(handlers.keys)
-        queue.async {
-            let observer = subscribe(pid, to: notifications)
-            DispatchQueue.main.async {
-                MainActor.assumeIsolated {
-                    if let observer {
-                        observers[pid] = observer
-                    }
-                    guard observer == nil, attemptsLeft > 0 else {
-                        retrying.remove(pid)
-                        return
-                    }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                        MainActor.assumeIsolated { retry(pid, attemptsLeft: attemptsLeft - 1) }
-                    }
+        Task {
+            defer { retrying.remove(pid) }
+            for _ in 0...Self.retries {
+                if let observer = await subscriber.subscribe(pid, to: notifications) {
+                    observers[pid] = observer
+                    return
                 }
+                try? await Task.sleep(for: Self.retryInterval)
             }
         }
     }
 
-    /// Subscribes to `notifications` in the app `pid`, and returns the observer when any of them worked.
-    ///
-    /// Notifications are delivered on the main thread. An app that doesn't answer within a quarter of a second counts as not ready.
-    private nonisolated static func subscribe(_ pid: pid_t, to notifications: [String]) -> AXObserver? {
+    private func unwatch(_ pid: pid_t) {
+        guard let observer = observers.removeValue(forKey: pid) else { return }
+        CFRunLoopRemoveSource(CFRunLoopGetMain(), AXObserverGetRunLoopSource(observer), .commonModes)
+    }
+}
+
+private actor Subscriber {
+    func subscribe(_ pid: pid_t, to notifications: [String]) -> sending AXObserver? {
         var observer: AXObserver?
         AXObserverCreate(pid, { _, element, notification, _ in
             var pid: pid_t = 0
-            var id: CGWindowID = 0
             AXUIElementGetPid(element, &pid)
             let app = pid
-            let window = _AXUIElementGetWindow(element, &id) == .success ? id : nil
+            let window = element.windowID
             let name = notification as String
-            MainActor.assumeIsolated { Watcher.deliver(name, app: app, window: window) }
+            MainActor.assumeIsolated { Watcher.shared.deliver(name, app: app, window: window) }
         }, &observer)
-        let element = AXUIElementCreateApplication(pid)
-        AXUIElementSetMessagingTimeout(element, 0.25)
+        let element = AXUIElement.appWithShortTimeout(pid)
         guard let observer,
               notifications.map({ AXObserverAddNotification(observer, element, $0 as CFString, nil) }).contains(.success)
         else { return nil }
         CFRunLoopAddSource(CFRunLoopGetMain(), AXObserverGetRunLoopSource(observer), .commonModes)
         return observer
-    }
-
-    private static func unwatch(_ pid: pid_t) {
-        guard let observer = observers.removeValue(forKey: pid) else { return }
-        CFRunLoopRemoveSource(CFRunLoopGetMain(), AXObserverGetRunLoopSource(observer), .commonModes)
-    }
-
-    /// Passes `notification` from the app `app` on to everyone who asked for it.
-    private static func deliver(_ notification: String, app: pid_t, window: CGWindowID?) {
-        for handle in handlers[notification] ?? [] { handle(app, window) }
     }
 }

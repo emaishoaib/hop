@@ -1,0 +1,34 @@
+name: Hop
+
+options:
+  bundleIdPrefix: com.mashoaib
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    CODE_SIGN_STYLE: Automatic
+
+targets:
+  Hop-macOS:
+    type: application
+    platform: macOS
+    sources:
+      - macOS
+      - AppIcon.icns
+    info:
+      path: macOS/Info.plist
+      properties:
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleIconFile: AppIcon
+        LSUIElement: true
+    settings:
+      base:
+        PRODUCT_NAME: Hop
+        PRODUCT_BUNDLE_IDENTIFIER: com.mashoaib.hop
+        CODE_SIGN_IDENTITY: "-"

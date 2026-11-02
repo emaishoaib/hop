@@ -28,13 +28,21 @@ Each window is labelled with its app's icon and its title. A VS Code window is l
 
 ## Build and open
 
-Needs macOS 14 or later and the Xcode Command Line Tools (`xcode-select --install`).
+Needs macOS 14 or later, Xcode and `xcodegen` (`brew install xcodegen`).
+
+The Xcode project is generated from `project.yml` and is not committed. Generate it first, and again whenever a file is added or removed:
 
 ```bash
-./build.sh
+xcodegen generate
 ```
 
-This builds `Hop.app` in this directory. Move it to `/Applications` if you like, then open it.
+Then build it:
+
+```bash
+xcodebuild -project Hop.xcodeproj -scheme Hop-macOS -configuration Release -derivedDataPath build build
+```
+
+This builds `Hop.app` in `build/Build/Products/Release`. Move it to `/Applications` if you like, then open it.
 
 On its first launch, Hop adds itself to System Settings > General > Login Items, so it starts at every login. If you switch it off there, Hop won't switch it back on.
 

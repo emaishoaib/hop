@@ -1,2 +1,4 @@
 .build/
 Hop.app/
+build/
+Hop.xcodeproj/

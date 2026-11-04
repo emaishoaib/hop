@@ -54,12 +54,11 @@ Hop is released as a signed and notarized DMG from any website.
 
 **Setup**
 
-All of these are already set up on this Mac.
-
 1. **Create a Developer ID certificate** -- this shows Macs the app came from you
 2. **Store the notarization login** -- this lets the script send the app to Apple for scanning. Hop uses the login stored as `notary`
 3. **Generate the Sparkle key** -- this proves that updates really came from you
-4. **Get a website address** -- this is where the DMG and update file will live. Set it as `HOP_UPDATES_HOST` in `Config/Release.xcconfig`
+4. **Get a website address** -- this is where the DMG and update file will live. It's the `apps` bucket in Cloudflare R2, connected to `apps.mashoaib.com`. Set the address as `HOP_UPDATES_HOST` in `Config/Release.xcconfig`
+5. **Log in to Cloudflare** -- this lets the script upload to the bucket. Run `npx wrangler login` once
 
 **Release**
 
@@ -69,7 +68,7 @@ All of these are already set up on this Mac.
    - puts it in a DMG
    - gets Apple to scan it
    - updates `appcast.xml`, the file that tells installed apps what the latest version is
-3. Upload the new DMG and `appcast.xml` from `releases/` to your website
+   - uploads the DMG and then `appcast.xml` to the website, so the appcast never lists a DMG that isn't there yet
 
 **What people do**
 

@@ -46,7 +46,7 @@ xcodebuild -project Hop.xcodeproj -scheme Hop-macOS -configuration Release -deri
 
 This builds `Hop.app` in `build/Build/Products/Release`. Move it to `/Applications` if you like, then open it.
 
-To try a change on the Hop you're running from there, use the script instead. It generates the project, builds it, quits Hop and opens the new build. If the build fails, the running Hop is left alone:
+To try a change, use the script instead. It generates the project, builds it, quits Hop and installs the new build in `/Applications`, replacing the copy there, then reopens it. If the build fails, the running Hop is left alone:
 
 ```bash
 scripts/rebuild.sh

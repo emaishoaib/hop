@@ -2,6 +2,8 @@ import AppKit
 import ServiceManagement
 
 let app = NSApplication.shared
+let delegate = AppDelegate()
+app.delegate = delegate
 if SMAppService.mainApp.status == .notRegistered { try? SMAppService.mainApp.register() }
 CGRequestScreenCaptureAccess()
 AppUpdater.shared.start()

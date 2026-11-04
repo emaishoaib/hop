@@ -1,4 +1,5 @@
 .build/
+.wrangler/
 Hop.app/
 build/
 Hop.xcodeproj/

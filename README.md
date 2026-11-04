@@ -50,16 +50,32 @@ On its first launch, Hop adds itself to System Settings > General > Login Items,
 
 ## Releasing
 
-Push a version tag to publish a release:
+Hop is released as a signed and notarized DMG from any website.
 
-```bash
-git tag v1.1
-git push origin v1.1
-```
+**Setup**
 
-GitHub then builds `Hop.app` and attaches it as `Hop.zip` to a release for that tag. The app's version is the tag's number without the `v`. The version in `Info.plist` is only what a local build reports. The workflow is `.github/workflows/release.yml`.
+All of these are already set up on this Mac.
 
-On a Mac set up with [workshop](https://github.com/emaishoaib/workshop), the next `setup.sh` run replaces the installed Hop with the new release. Its permissions then need granting again, as described under Permissions.
+1. **Create a Developer ID certificate** -- this shows Macs the app came from you
+2. **Store the notarization login** -- this lets the script send the app to Apple for scanning. Hop uses the login stored as `notary`
+3. **Generate the Sparkle key** -- this proves that updates really came from you
+4. **Get a website address** -- this is where the DMG and update file will live. Set it as `HOP_UPDATES_HOST` in `Config/Release.xcconfig`
+
+**Release**
+
+1. Raise the version and build number in `project.yml`
+2. Run `scripts/release-mac.sh`. It does all of this for you:
+   - builds and signs the app
+   - puts it in a DMG
+   - gets Apple to scan it
+   - updates `appcast.xml`, the file that tells installed apps what the latest version is
+3. Upload the new DMG and `appcast.xml` from `releases/` to your website
+
+**What people do**
+
+1. They download the DMG from your website
+2. They open it and drag Hop into Applications
+3. From then on, Hop checks `appcast.xml` by itself and offers new versions as you release them
 
 ## Permissions
 
@@ -68,7 +84,7 @@ Hop needs two permissions, which it asks for on its first launch:
 - **Accessibility**, to see the shortcuts, focus windows and follow which window you're in. Hop shows a Dock icon until this is granted, then hides it and starts working.
 - **Screen Recording**, for the thumbnails and window titles. Hop has to be relaunched after this is granted.
 
-Hop is signed ad hoc, so macOS treats each rebuild as a new app. After a rebuild, remove Hop from both lists in System Settings > Privacy & Security and add it back.
+Release builds are signed with Developer ID, so both permissions carry over from one build to the next. Debug builds are signed ad hoc, so macOS treats each of them as a new app. After a Debug build, remove Hop from both lists in System Settings > Privacy & Security and add it back.
 
 ## The ` key
 

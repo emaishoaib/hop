@@ -75,10 +75,27 @@ Hop is released as a signed and notarized DMG from any website.
    - gets Apple to scan it
    - updates `appcast.xml`, the file that tells installed apps what the latest version is
    - uploads the DMG and then `appcast.xml` to the website, so the appcast never lists a DMG that isn't there yet
+   - uploads the DMG a second time as `Hop.dmg`, which each release overwrites, so that name is always the latest version
+
+**Sharing the download**
+
+Share `https://apps.mashoaib.com/hop`. It works with or without the slash at the end, so `https://apps.mashoaib.com/hop/` does the same. A redirect rule in Cloudflare sends both on to `/hop/Hop.dmg`, so they always download the latest version. The rule is set up once, under Rules > Redirect Rules for mashoaib.com:
+
+- **When incoming requests match** -- a custom filter expression, entered through **Edit expression**:
+
+  ```
+  http.host eq "apps.mashoaib.com" and http.request.uri.path in {"/hop" "/hop/"}
+  ```
+
+- **Then** -- a static redirect to `https://apps.mashoaib.com/hop/Hop.dmg` with status code 302, and the query string not preserved
+
+The expression lists both paths exactly. A wildcard such as `/hop*` would also catch `/hop/Hop.dmg` and `/hop/appcast.xml`, so the download would redirect to itself and installed copies couldn't check for updates.
+
+It's a 302, a temporary redirect, because browsers remember a 301 permanently.
 
 **What people do**
 
-1. They download the DMG from your website
+1. They download the DMG from `https://apps.mashoaib.com/hop`
 2. They open it and drag Hop into Applications
 3. From then on, Hop checks `appcast.xml` by itself and offers new versions as you release them. They can also use **Check for Updates…** in the settings window
 

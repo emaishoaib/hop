@@ -10,9 +10,16 @@ final class AppUpdater {
         userDriverDelegate: nil
     )
 
+    private(set) var hasStarted = false
+
     func start() {
         #if !DEBUG
         controller.startUpdater()
+        hasStarted = true
         #endif
+    }
+
+    func checkForUpdates() {
+        controller.checkForUpdates(nil)
     }
 }

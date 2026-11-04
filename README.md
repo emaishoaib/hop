@@ -74,7 +74,7 @@ Hop is released as a signed and notarized DMG from any website.
 
 1. They download the DMG from your website
 2. They open it and drag Hop into Applications
-3. From then on, Hop checks `appcast.xml` by itself and offers new versions as you release them
+3. From then on, Hop checks `appcast.xml` by itself and offers new versions as you release them. They can also use **Check for Updates…** in the settings window
 
 ## Permissions
 
@@ -107,9 +107,15 @@ Hop uses one private macOS function, `_AXUIElementGetWindow`. It's the only reli
 swift make-icon.swift
 ```
 
+## Settings
+
+Open Hop while it's already running, from Applications or Spotlight, and its settings window appears. It shows the version and has a **Check for Updates…** button.
+
+The button is disabled in Debug builds, because the updater only runs in Release builds.
+
 ## Quit and uninstall
 
-Hop has no window or menu to quit from. To quit it:
+Hop has no menu or button to quit from. To quit it:
 
 ```bash
 pkill -x Hop

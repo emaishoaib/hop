@@ -9,6 +9,8 @@ struct SettingsView: View {
             Text("Hop")
                 .font(.title2.bold())
             VersionLabel()
+            CheckForUpdatesButton()
+                .padding(.top, 12)
         }
         .padding(32)
         .frame(width: 320)
@@ -21,5 +23,12 @@ private struct VersionLabel: View {
     var body: some View {
         Text("Version \(info["CFBundleShortVersionString"] as? String ?? "") (\(info["CFBundleVersion"] as? String ?? ""))")
             .foregroundStyle(.secondary)
+    }
+}
+
+private struct CheckForUpdatesButton: View {
+    var body: some View {
+        Button("Check for Updates…") { AppUpdater.shared.checkForUpdates() }
+            .disabled(!AppUpdater.shared.hasStarted)
     }
 }

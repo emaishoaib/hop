@@ -46,6 +46,12 @@ xcodebuild -project Hop.xcodeproj -scheme Hop-macOS -configuration Release -deri
 
 This builds `Hop.app` in `build/Build/Products/Release`. Move it to `/Applications` if you like, then open it.
 
+To try a change on the Hop you're running from there, use the script instead. It generates the project, builds it, quits Hop and opens the new build. If the build fails, the running Hop is left alone:
+
+```bash
+scripts/rebuild.sh
+```
+
 On its first launch, Hop adds itself to System Settings > General > Login Items, so it starts at every login. If you switch it off there, Hop won't switch it back on.
 
 ## Releasing
